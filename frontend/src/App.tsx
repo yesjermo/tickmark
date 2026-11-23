@@ -24,10 +24,12 @@ import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { FocusStrip, useComfort } from "./components/Comfort";
 import { AccountCard } from "./components/AccountCard";
 import { Mark } from "./components/Mark";
-import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon } from "lucide-react";
+import { TVChart, TVTape } from "./components/TradingView";
+import { Portfolio } from "./components/Portfolio";
+import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart } from "lucide-react";
 
 export type Level = "beginner" | "analyst";
-type CenterTab = "evidence" | "journal" | "forward" | "documents" | "day" | "crypto" | "connections";
+type CenterTab = "portfolio" | "evidence" | "journal" | "forward" | "documents" | "day" | "crypto" | "connections";
 type SideTab = "copilot" | "strategy" | "order" | "orders" | "broker" | "risk" | "account";
 
 export interface Screen {
@@ -36,28 +38,45 @@ export interface Screen {
 }
 
 export default function App() {
-  const [auth, setAuth] = useState<{ portal: boolean; user: PortalUser | null; first_user?: boolean; open_signup?: boolean; setup_code_required?: boolean } | null>(null);
-  const load = () => api.get<any>("/api/auth/status").then(setAuth).catch(() => setAuth({ portal: false, user: null }));
+  const [auth, setAuth] = useState<{ portal: boolean; user: PortalUser | null; guest?: boolean; first_user?: boolean; open_signup?: boolean; setup_code_required?: boolean } | null>(null);
+  const [authBox, setAuthBox] = useState<"in" | "up" | null>(null);
+  // Like any website: visitors land on the desk as a guest (real prices, paper trades kept on this browser), and sign in when they want.
+  const load = () => api.get<any>("/api/auth/status").then(async (a) => {
+    if (a.portal && !a.user && !a.first_user && !new URLSearchParams(location.search).get("next")) {
+      try { await api.post("/api/auth/guest"); a = await api.get<any>("/api/auth/status"); } catch { /* fall back to the sign-in page */ }
+    }
+    setAuth(a);
+  }).catch(() => setAuth({ portal: false, user: null }));
   useEffect(() => {
     load();
-    const out = () => setAuth((a) => (a ? { ...a, user: null } : a));
+    const out = () => { load(); };
+    const up = () => setAuthBox("up");
+    window.addEventListener("swingdesk:signup", up);
     window.addEventListener("swingdesk:signin", out);
-    return () => window.removeEventListener("swingdesk:signin", out);
+    return () => { window.removeEventListener("swingdesk:signin", out); window.removeEventListener("swingdesk:signup", up); };
   }, []);
   if (!auth) return <div className="pad muted">Loading…</div>;
   if (auth.portal && !auth.user) return <Login firstUser={!!auth.first_user} openSignup={!!auth.open_signup} setupCode={!!auth.setup_code_required}
     onIn={(u) => setAuth({ ...auth, user: u, first_user: false })} />;
-  return <Desk user={auth.portal ? auth.user : null} key={auth.user?.id ?? "local"} />;
+  return (
+    <>
+      <Desk user={auth.portal ? auth.user : null} key={`${auth.user?.id ?? "local"}:${auth.user?.role}`} guest={!!auth.guest} openAuth={setAuthBox} />
+      <AnimatePresence>
+        {authBox && <Login key="auth" firstUser={false} openSignup={!!auth.open_signup} start={authBox} guest={!!auth.guest}
+          onClose={() => setAuthBox(null)} onIn={() => { setAuthBox(null); load(); }} />}
+      </AnimatePresence>
+    </>
+  );
 }
 
-function Desk({ user }: { user: PortalUser | null }) {
+function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; guest?: boolean; openAuth: (m: "in" | "up") => void }) {
   const [status, setStatus] = useState<Status_ | null>(null);
   const [screen, setScreen] = useState<Screen | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [journal, setJournal] = useState<any[]>([]);
   const [selected, setSelected] = useState("NVDA");
   const [level, setLevel] = useState<Level>("beginner");
-  const [center, setCenter] = useState<CenterTab>("evidence");
+  const [center, setCenter] = useState<CenterTab>("portfolio");
   const [side, setSide] = useState<SideTab>("strategy");
   const [tick, setTick] = useState(0);
   // Toasts through sonner: same notify(string) API the panels already use.
@@ -68,6 +87,8 @@ function Desk({ user }: { user: PortalUser | null }) {
   }, []);
   const [palette, setPalette] = useState(false);
   const comfort = useComfort();
+  const [chartSrc, setChartSrc] = useState<"rules" | "tv">(() => { try { return (localStorage.getItem("tickmark.chart") as "rules" | "tv") || "rules"; } catch { return "rules"; } });
+  const pickChart = (c: "rules" | "tv") => { setChartSrc(c); try { localStorage.setItem("tickmark.chart", c); } catch { /* private mode */ } };
   const [cryptoPrefill, setCryptoPrefill] = useState<CryptoForm | null>(null);
   const [prefill, setPrefill] = useState<{ symbol: string; overrides: Record<string, any>; n: number } | null>(null);
 
@@ -107,6 +128,14 @@ function Desk({ user }: { user: PortalUser | null }) {
   }, [refresh]);
 
 
+  // A new desk loads real prices in the background on its first visit: check back until they arrive (about a minute at most).
+  const [waits, setWaits] = useState(0);
+  useEffect(() => {
+    if (!screen?.needs_refresh || waits >= 12) return;
+    const t = setTimeout(() => { setWaits((w) => w + 1); refresh(); }, 5000);
+    return () => clearTimeout(t);
+  }, [screen, waits, refresh]);
+
   // Keep the selection valid when the live watchlist changes.
   useEffect(() => {
     if (screen?.results.length && !screen.results.some((r) => r.symbol === selected)) setSelected(screen.results[0].symbol);
@@ -114,11 +143,11 @@ function Desk({ user }: { user: PortalUser | null }) {
 
   const ev = screen?.results.find((r) => r.symbol === selected) ?? null;
   const live = status?.data_mode === "live";
-  const CENTER: Record<CenterTab, string> = { evidence: "Rule evidence", journal: `Journal (${journal.length})`, forward: live ? "Live forward test" : "Forward test",
+  const CENTER: Record<CenterTab, string> = { portfolio: "Portfolio", evidence: "Rule evidence", journal: `Journal (${journal.length})`, forward: live ? "Live forward test" : "Forward test",
     documents: "Documents", day: "Day trading", crypto: "Crypto", connections: "Connections" };
-  const CICON: Record<CenterTab, typeof Gauge> = { evidence: ListChecks, journal: BookOpen, forward: Timer, documents: FileText, day: CandlestickChart,
+  const CICON: Record<CenterTab, typeof Gauge> = { portfolio: PieChart, evidence: ListChecks, journal: BookOpen, forward: Timer, documents: FileText, day: CandlestickChart,
     crypto: Bitcoin, connections: Plug };
-  const SHORT: Record<CenterTab, string> = { evidence: "Evidence", journal: "Journal", forward: "Forward", documents: "Docs", day: "Day", crypto: "Crypto", connections: "Connect" };
+  const SHORT: Record<CenterTab, string> = { portfolio: "Portfolio", evidence: "Evidence", journal: "Journal", forward: "Forward", documents: "Docs", day: "Day", crypto: "Crypto", connections: "Connect" };
   const SIDE: Record<SideTab, string> = { copilot: "Copilot", strategy: "Strategy", order: "Ticket", orders: "Orders", broker: "Broker", risk: "Risk",
     account: user ? "Account" : "AI apps" };
   const SICON: Record<SideTab, typeof Gauge> = { copilot: Bot, strategy: Target, order: ClipboardList, orders: BarChart3, broker: Briefcase,
@@ -164,10 +193,11 @@ function Desk({ user }: { user: PortalUser | null }) {
         </button>
       </nav>
       <div className="shell">
-      <TopBar comfort={comfort} status={status} level={level} setLevel={setLevel} onChanged={refresh} notify={setToast} tick={tick}
+      <TopBar comfort={comfort} guest={guest} openAuth={openAuth} status={status} level={level} setLevel={setLevel} onChanged={refresh} notify={setToast} tick={tick}
         openPalette={() => setPalette(true)} openConnections={() => setCenter("connections")} openBroker={() => setSide("broker")} />
       <CommandMenu open={palette} setOpen={setPalette} actions={actions} />
       <Toaster theme={comfort.theme} position="bottom-right" closeButton toastOptions={{ className: "sd-toast" }} />
+      {!comfort.focus && screen && screen.results.length > 0 && <TVTape symbols={screen.results.map((r) => r.symbol)} />}
       {comfort.focus && <FocusStrip step={nextStep} onGo={"go" in nextStep ? nextStep.go : undefined} />}
       {screen && !screen.ruleset.version && !comfort.focus && (
         <div className="banner">
@@ -176,16 +206,23 @@ function Desk({ user }: { user: PortalUser | null }) {
       )}
       <div className="workspace" key={comfort.theme}>
         <aside className="left">
-          <AccountCard status={status} />
+          {center !== "portfolio" && <AccountCard status={status} />}
           <Watchlist screen={screen} live={live} selected={selected} onChanged={refresh} notify={setToast}
             onSelect={(s) => { setSelected(s); setCenter("evidence"); }} />
         </aside>
         <main className="center">
           {/* Hidden (not unmounted) while day trading, so the daily chart isn't torn down and rebuilt. */}
-          <section className="chart-card card" style={center === "day" || center === "crypto" || center === "connections" ? { display: "none" } : undefined}>
+          <section className="chart-card card" style={center === "day" || center === "crypto" || center === "connections" || center === "portfolio" ? { display: "none" } : undefined}>
             {/* Keep the chart mounted across refreshes and mode switches; show the empty state on top of it. */}
-            <PriceChart symbol={ev?.symbol ?? selected} tick={tick} evaluation={ev} journal={journal} live={live} />
-            {!ev && <div className="empty overlay">{screen?.needs_refresh ? "No live data yet. Click Refresh live data in the top bar." : "Loading…"}</div>}
+            <div className="seg chart-src" role="group" aria-label="Chart source">
+              <button className={chartSrc === "rules" ? "on" : ""} onClick={() => pickChart("rules")} title="Tickmark's chart: completed bars, rule markers and the planned stop">Rules</button>
+              <button className={chartSrc === "tv" ? "on" : ""} onClick={() => pickChart("tv")} title="TradingView's live chart and indicators">TradingView</button>
+            </div>
+            <div style={chartSrc === "tv" ? { display: "none" } : { height: "100%" }}>
+              <PriceChart symbol={ev?.symbol ?? selected} tick={tick} evaluation={ev} journal={journal} live={live} />
+            </div>
+            {chartSrc === "tv" && <TVChart symbol={ev?.symbol ?? selected} />}
+            {!ev && chartSrc === "rules" && <div className="empty overlay">{screen?.needs_refresh ? "No live data yet. Click Refresh live data in the top bar." : "Loading…"}</div>}
           </section>
           <div className="center-head">
             {(() => { const Icon = CICON[center]; return <h2><Icon size={16} aria-hidden /> {CENTER[center]}</h2>; })()}
@@ -193,6 +230,7 @@ function Desk({ user }: { user: PortalUser | null }) {
           <AnimatePresence mode="wait" initial={false}>
             <motion.section key={center} className="center-body" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}>
+              {center === "portfolio" && <Portfolio tick={tick} notify={setToast} />}
               {center === "evidence" && ev && <Evidence ev={ev} level={level} ruleset={screen!.ruleset} tick={tick} />}
               {center === "journal" && <Journal entries={journal} level={level} onChanged={refresh} tick={tick} />}
               {center === "forward" && <Forward tick={tick} level={level} live={live} />}
@@ -226,7 +264,7 @@ function Desk({ user }: { user: PortalUser | null }) {
                 openCrypto={(form) => { setCryptoPrefill(form); setCenter("crypto"); }}
                 openTicket={(sym, overrides) => { setSelected(sym); setCenter("evidence"); setPrefill({ symbol: sym, overrides, n: Date.now() }); setSide("order"); }} />
             )}
-            {side === "strategy" && <StrategyPanel onSaved={() => { refresh(); setToast("Rule set saved. The watchlist was re-screened."); }} />}
+            {side === "strategy" && <StrategyPanel notify={setToast} onSaved={() => { refresh(); setToast("Rule set saved. The watchlist was re-screened."); }} />}
             {side === "order" && status && (
               <OrderTicket ev={ev} ruleset={screen?.ruleset ?? null} status={status} prefill={prefill} onPrefillUsed={() => setPrefill(null)}
                 onSubmitted={() => { refresh(); }} notify={setToast} goOrders={() => setSide("orders")} />

@@ -27,6 +27,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("SWINGDESK_SCHEDULER", "off")
     monkeypatch.setenv("SWINGDESK_STREAM", "off")
     monkeypatch.setenv("SWINGDESK_DAYMON", "off")
+    monkeypatch.setenv("SWINGDESK_WARM_LIVE", "off")              # no background Yahoo download for new desks in tests
     monkeypatch.setattr(credentials, "_backend", MemoryKeyring())
     monkeypatch.delenv("ALPACA_API_KEY_ID", raising=False)
     monkeypatch.delenv("ALPACA_API_SECRET_KEY", raising=False)
@@ -35,6 +36,12 @@ def client(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
     from app import copilot
     monkeypatch.setattr(copilot, "CLIENT_FACTORY", None)
+    from app import intraday
+
+    class NoQuotes:                                               # Yahoo quote fallback must never go online in tests
+        def Ticker(self, sym):
+            raise ConnectionError("offline in tests")
+    monkeypatch.setattr(intraday, "YAHOO_QUOTES", NoQuotes())
     from app.main import app
     with TestClient(app) as c:
         yield c

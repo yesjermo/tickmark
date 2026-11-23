@@ -21,8 +21,8 @@ const WS: { id: Workspace; label: string; hint: string; Icon: typeof FlaskConica
   { id: "trading", label: "Live trading", hint: "Real money, on accounts you switched on in the Broker tab.", Icon: CircleDot },
 ];
 
-export function TopBar({ comfort, status, level, setLevel, onChanged, notify, tick, openPalette, openConnections, openBroker }: {
-  comfort: ReturnType<typeof useComfort>; status: Status_ | null; level: Level; setLevel: (l: Level) => void; onChanged: () => void; notify: (s: string) => void; tick: number;
+export function TopBar({ comfort, guest = false, openAuth, status, level, setLevel, onChanged, notify, tick, openPalette, openConnections, openBroker }: {
+  comfort: ReturnType<typeof useComfort>; guest?: boolean; openAuth?: (m: "in" | "up") => void; status: Status_ | null; level: Level; setLevel: (l: Level) => void; onChanged: () => void; notify: (s: string) => void; tick: number;
   openPalette: () => void; openConnections: () => void; openBroker: () => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -107,6 +107,10 @@ export function TopBar({ comfort, status, level, setLevel, onChanged, notify, ti
             <button key={l} className={level === l ? "on" : ""} onClick={() => setLevel(l)}>{l === "beginner" ? "Beginner" : "Analyst"}</button>
           ))}
         </div>
+        {guest && openAuth && <>
+          <button className="btn ghost small" onClick={() => openAuth("in")}>Sign in</button>
+          <button className="btn primary small" onClick={() => openAuth("up")}>Create free account</button>
+        </>}
         <button className="cmdk-trigger" onClick={openPalette} title="Command palette"><CmdIcon size={13} aria-hidden /> {mac ? "⌘K" : "Ctrl K"}</button>
       </div>
 

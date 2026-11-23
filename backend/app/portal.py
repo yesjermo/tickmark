@@ -29,7 +29,9 @@ from datetime import datetime, timedelta, timezone
 from . import db
 
 SESSION_COOKIE = "sd_session"
-SESSION_DAYS = 14
+SESSION_DAYS = 30          # "Remember me" (and guests): the browser keeps the sign-in this long
+SHORT_SESSION_DAYS = 1     # without "Remember me": a browser-session cookie, and the server forgets it after a day
+GUEST_DAYS = 30            # an unused guest desk is removed after this long
 MIN_PASSWORD = 10
 LOCAL_USER = "local"                 # owner of MCP tokens in the single-user app
 _fail: dict[str, list[float]] = {}
@@ -138,7 +140,50 @@ def _public(u) -> dict:
     return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"], "created_at": u["created_at"]}
 
 
-def signup(email: str, password: str, name: str = "", invite: str = "") -> dict:
+def real_user_count(c=None) -> int:
+    own = c is None
+    c = c or conn()
+    try:
+        return c.execute("SELECT COUNT(*) FROM users WHERE role!='guest'").fetchone()[0]
+    finally:
+        if own:
+            c.close()
+
+
+def create_guest() -> tuple[str, dict]:
+    """A browser's own view-only desk: real prices, paper trades saved, nothing that touches money or keys."""
+    c = conn()
+    try:
+        uid = "u_" + uuid.uuid4().hex[:16]
+        c.execute("INSERT INTO users(id,email,pw_hash,role,name,created_at) VALUES(?,?,?,?,?,?)",
+                  (uid, f"guest-{uid[2:]}@guest.invalid", "!", "guest", "Guest", _now()))
+        token = secrets.token_urlsafe(32)
+        exp = (datetime.now(timezone.utc) + timedelta(days=GUEST_DAYS)).isoformat(timespec="seconds")
+        c.execute("INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)", (_h(token), uid, _now(), exp))
+        return token, _public(c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone())
+    finally:
+        c.close()
+
+
+def cleanup_guests(days: int = GUEST_DAYS) -> int:
+    """Remove guest desks nobody has opened for `days` (their sessions have all expired). Real accounts are never touched."""
+    import shutil
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    c = conn()
+    try:
+        old = [r["id"] for r in c.execute("""SELECT u.id FROM users u WHERE u.role='guest' AND u.created_at < ? AND NOT EXISTS
+                 (SELECT 1 FROM sessions s WHERE s.user_id=u.id AND (s.expires_at > ? OR COALESCE(s.last_seen, '') > ?))""",
+                 (cutoff, _now(), cutoff))]
+        for uid in old:
+            c.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
+            c.execute("DELETE FROM users WHERE id=? AND role='guest'", (uid,))
+            shutil.rmtree(tenant_dir(uid), ignore_errors=True)
+        return len(old)
+    finally:
+        c.close()
+
+
+def signup(email: str, password: str, name: str = "", invite: str = "", guest_id: str | None = None) -> dict:
     email = (email or "").strip().lower()
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         raise PortalError("Enter a valid email address.")
@@ -147,7 +192,7 @@ def signup(email: str, password: str, name: str = "", invite: str = "") -> dict:
     c = conn()
     try:
         c.execute("BEGIN IMMEDIATE")
-        first = c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+        first = real_user_count(c) == 0
         setup = os.environ.get("SWINGDESK_SETUP_CODE", "").strip()
         if first and setup and not hmac.compare_digest((invite or "").strip(), setup):
             c.execute("ROLLBACK")      # on a public server, only the operator (who can read the setup code) becomes admin
@@ -164,9 +209,16 @@ def signup(email: str, password: str, name: str = "", invite: str = "") -> dict:
         if c.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
             c.execute("ROLLBACK")
             raise PortalError("An account with this email already exists.", 409)
-        uid = "u_" + uuid.uuid4().hex[:16]
-        c.execute("INSERT INTO users(id,email,pw_hash,role,name,created_at) VALUES(?,?,?,?,?,?)",
-                  (uid, email, hash_password(password), "admin" if first else "user", name.strip()[:80] or None, _now()))
+        g = c.execute("SELECT id FROM users WHERE id=? AND role='guest'", (guest_id,)).fetchone() if guest_id else None
+        if g:   # the guest becomes a real account and keeps its desk (paper trades, watchlist, journal)
+            uid = g["id"]
+            c.execute("UPDATE users SET email=?, pw_hash=?, role=?, name=? WHERE id=?",
+                      (email, hash_password(password), "admin" if first else "user", name.strip()[:80] or None, uid))
+            c.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
+        else:
+            uid = "u_" + uuid.uuid4().hex[:16]
+            c.execute("INSERT INTO users(id,email,pw_hash,role,name,created_at) VALUES(?,?,?,?,?,?)",
+                      (uid, email, hash_password(password), "admin" if first else "user", name.strip()[:80] or None, _now()))
         if inv:
             c.execute("UPDATE invites SET used_by=?, used_at=? WHERE code_hash=?", (uid, _now(), inv["code_hash"]))
         c.execute("COMMIT")
@@ -187,21 +239,21 @@ def _failed(key: str) -> None:
         _fail.setdefault(key, []).append(time.time())
 
 
-def login(email: str, password: str, ip: str = "") -> tuple[str, dict]:
+def login(email: str, password: str, ip: str = "", remember: bool = True) -> tuple[str, dict]:
     email = (email or "").strip().lower()
     for key in (f"e:{email}", f"i:{ip}"):
         if _throttled(key):
             raise PortalError("Too many failed sign-ins. Try again in 15 minutes.", 429)
     c = conn()
     try:
-        u = c.execute("SELECT * FROM users WHERE email=? AND disabled=0", (email,)).fetchone()
+        u = c.execute("SELECT * FROM users WHERE email=? AND disabled=0 AND role!='guest'", (email,)).fetchone()
         ok = check_password(password or "", u["pw_hash"]) if u else check_password(password or "", hash_password("x" * 12))
         if not (u and ok):
             _failed(f"e:{email}")
             _failed(f"i:{ip}")
             raise PortalError("Wrong email or password.", 401)
         token = secrets.token_urlsafe(32)
-        exp = (datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)).isoformat(timespec="seconds")
+        exp = (datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS if remember else SHORT_SESSION_DAYS)).isoformat(timespec="seconds")
         c.execute("INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)", (_h(token), u["id"], _now(), exp))
         return token, _public(u)
     finally:
@@ -250,7 +302,7 @@ def list_users(admin: dict) -> list[dict]:
         raise PortalError("Only the administrator can list users.", 403)
     c = conn()
     try:
-        return [_public(r) | {"disabled": bool(r["disabled"])} for r in c.execute("SELECT * FROM users ORDER BY created_at")]
+        return [_public(r) | {"disabled": bool(r["disabled"])} for r in c.execute("SELECT * FROM users WHERE role!='guest' ORDER BY created_at")]
     finally:
         c.close()
 

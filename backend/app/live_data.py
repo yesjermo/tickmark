@@ -69,6 +69,18 @@ def fetch_bars(symbol: str, now: datetime | None = None) -> list[dict]:
                     "close": clean[3], "volume": clean[4], "source": SOURCE})
     if not out:
         raise ValueError(f"no completed sessions for {symbol}")
+    last = out[-1]
+    if last["close"] is None and last["date"] == cutoff:
+        # Yahoo sometimes leaves the newest daily close blank (seen for SNDK on 2026-11-20) while its quote already has it.
+        # Once the session is complete, the regular-market price is that session's close; label where it came from.
+        try:
+            fi = yf().Ticker(symbol).fast_info
+            px = fi.get("lastPrice") if hasattr(fi, "get") else getattr(fi, "last_price", None)
+        except Exception:
+            px = None
+        if px and px == px and px > 0:
+            last["close"] = round(float(px), 4)
+            last["source"] = f"{SOURCE} (close filled from the Yahoo quote; history had none)"
     return out
 
 

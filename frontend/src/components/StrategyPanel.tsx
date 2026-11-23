@@ -1,3 +1,4 @@
+import { StrategyResearch } from "./StrategyResearch";
 import { useEffect, useState } from "react";
 import { api, ApiError, Interpretation, Params, Ruleset, StrategyInfo } from "../api";
 
@@ -25,7 +26,7 @@ const F: Record<string, Field> = {
 };
 const SHARED = ["hold_sessions", "stop_buffer_pct", "risk_per_trade_pct", "max_position_pct"];
 
-export function StrategyPanel({ onSaved }: { onSaved: () => void }) {
+export function StrategyPanel({ onSaved, notify }: { onSaved: () => void; notify?: (s: string) => void }) {
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<{ params: Params; interpretations: Interpretation[] } | null>(null);
   const [active, setActive] = useState<Ruleset | null>(null);
@@ -66,6 +67,7 @@ export function StrategyPanel({ onSaved }: { onSaved: () => void }) {
 
   return (
     <div className="strategy">
+      {notify && <StrategyResearch notify={notify} onApplied={() => { load(); onSaved(); }} />}
       <label className="lbl">Start from a strategy</label>
       <div className="stratpick" role="group" aria-label="Strategy">
         {strategies.map((st) => (

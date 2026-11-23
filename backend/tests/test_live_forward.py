@@ -41,6 +41,13 @@ class FakeTicker:
 
     calendar = {}
 
+    @property
+    def fast_info(self):
+        q = self.world.get("quote", {}).get(self.sym)
+        if q is None:
+            raise AttributeError("no quote")
+        return {"lastPrice": q}
+
 
 class FakeYF:
     def __init__(self, world):
@@ -199,3 +206,13 @@ def test_forward_frozen_evidence_survives_rule_change(live):
     assert f["ruleset_version"] == 2 and f["stats"]["recorded"] == 0      # v2 stats start fresh
     old = [s for s in f["signals"] if s["ruleset_version"] == 1]
     assert old and old[0]["evidence"]["status"] == "QUALIFIES"
+
+
+def test_blank_newest_close_is_filled_from_the_quote(world):
+    """Yahoo left SNDK's 2026-11-20 close blank while its quote had 79.24: fill it, label the source."""
+    world["nan_close"] = {"SNDK": ["2026-11-20"]}
+    world["quote"] = {"SNDK": 79.24}
+    bars = live_data.fetch_bars("SNDK")
+    assert bars[-1]["date"] == "2026-11-20" and bars[-1]["close"] == 79.24 and "filled from the Yahoo quote" in bars[-1]["source"]
+    world["quote"] = {}
+    assert live_data.fetch_bars("SNDK")[-1]["close"] is None          # no quote: stays missing, never zero

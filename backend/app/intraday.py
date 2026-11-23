@@ -443,14 +443,34 @@ def latest_quote(sym: str) -> dict | None:
 def latest_trades(symbols: list[str]) -> dict:
     """Latest trade per symbol from Alpaca (IEX feed, free with any Alpaca key). {} without keys or on errors."""
     k, s, _ = credentials.get_alpaca(db.environment())
-    if not k or not symbols:
+    if not symbols:
         return {}
+    if not k:
+        return yahoo_quotes(symbols)
     try:
         with httpx.Client(base_url=DATA_URL, transport=TRANSPORT, timeout=10, headers={"APCA-API-KEY-ID": k, "APCA-API-SECRET-KEY": s}) as c:
             trades = c.get("/v2/stocks/trades/latest", params={"symbols": ",".join(symbols), "feed": "iex"}).json().get("trades", {})
         return {sym: {"price": float(t["p"]), "t": t["t"], "feed": "iex"} for sym, t in trades.items() if t.get("p")}
     except Exception:
         return {}
+
+
+YAHOO_QUOTES = None   # tests inject a fake
+
+
+def yahoo_quotes(symbols: list[str]) -> dict:
+    """Free fallback without an Alpaca key: Yahoo's regular-market price (delayed up to ~15 minutes on some exchanges)."""
+    from . import live_data
+    out = {}
+    for sym in symbols:
+        try:
+            fi = (YAHOO_QUOTES or live_data.yf()).Ticker(sym).fast_info
+            px = fi.get("lastPrice") if hasattr(fi, "get") else getattr(fi, "last_price", None)
+            if px and px == px and px > 0:
+                out[sym] = {"price": round(float(px), 4), "t": None, "feed": "yahoo"}
+        except Exception:
+            continue
+    return out
 
 
 # ---------- paper execution ----------

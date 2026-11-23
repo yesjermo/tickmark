@@ -16,6 +16,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   const isJson = (r.headers.get("content-type") ?? "").includes("application/json");
   const data = isJson ? await r.json().catch(() => ({})) : {};
   if (r.status === 401 && data?.signin) window.dispatchEvent(new Event("swingdesk:signin"));
+  if (r.status === 403 && data?.signup) window.dispatchEvent(new Event("swingdesk:signup"));   // a guest tried something that needs an account
   if (!r.ok) throw new ApiError(r.status, data);
   if (!isJson) throw new ApiError(r.status, { detail: `Unexpected non-JSON reply from ${path} (is the API server up to date?)` });
   return data as T;

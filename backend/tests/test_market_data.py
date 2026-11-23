@@ -158,3 +158,13 @@ def test_quotes_endpoint_needs_live_data_and_labels_the_feed(client, monkeypatch
     assert client.put("/api/data/mode", json={"mode": "live"}).status_code == 200
     q = client.get("/api/quotes").json()["quotes"]
     assert q and all(v["feed"] == "iex" and v["prev_close"] and v["change_pct"] is not None for v in q.values())
+
+
+def test_quotes_fall_back_to_yahoo_without_an_alpaca_key(client, monkeypatch):
+    from app import intraday
+
+    class YF:
+        def Ticker(self, sym):
+            return type("T", (), {"fast_info": {"lastPrice": {"SNDK": 79.24}.get(sym)}})()
+    monkeypatch.setattr(intraday, "YAHOO_QUOTES", YF())
+    assert intraday.latest_trades(["SNDK", "NVDA"]) == {"SNDK": {"price": 79.24, "t": None, "feed": "yahoo"}}

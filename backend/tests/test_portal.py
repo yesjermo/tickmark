@@ -28,7 +28,7 @@ def signup(c, email, invite=""):
 def test_signin_required_and_first_user_is_admin(P):
     a = P()
     assert a.get("/api/watchlist/screen").status_code == 401
-    assert a.get("/api/auth/status").json() == {"portal": True, "user": None, "first_user": True, "open_signup": False,
+    assert a.get("/api/auth/status").json() == {"portal": True, "user": None, "first_user": True, "guest": False, "open_signup": False,
                                                 "setup_code_required": False}
     u = signup(a, "Owner@Example.com")
     assert u["role"] == "admin" and u["email"] == "owner@example.com"
@@ -158,3 +158,36 @@ def test_any_master_secret_works_and_public_url_is_used(P, monkeypatch):
         assert credentials.get_secret("x") == "y"
     meta = a.get("/.well-known/oauth-protected-resource").json()
     assert meta["resource"] == "https://tickmark.onrender.com/mcp"
+
+
+def test_guest_desk_is_view_only_on_real_data_and_converts_on_signup(P, monkeypatch):
+    monkeypatch.setenv("SWINGDESK_OPEN_SIGNUP", "on")
+    admin = P()
+    signup(admin, "owner@example.com")
+    g = P()
+    me = g.post("/api/auth/guest").json()["user"]
+    assert me["role"] == "guest" and g.get("/api/auth/status").json()["guest"] is True
+    assert g.get("/api/status").json()["data_mode"] == "live"                     # guests start on real prices
+    assert g.get("/api/watchlist/screen").status_code == 200
+    for path, body in (("/api/broker/connect", {"key_id": "k", "secret": "s"}), ("/api/copilot/chat", {"text": "hi"}),
+                       ("/api/linked", {}), ("/api/live-gate/enable", {})):
+        r = g.post(path, json=body)
+        assert r.status_code == 403 and r.json().get("signup") is True, path
+    assert g.put("/api/watchlist", json={"symbols": ["NVDA"]}).status_code != 403   # paper desk settings stay usable
+    assert g.post("/api/auth/login", json={"email": me["email"], "password": "!"}).status_code == 401   # guests can't sign in by email
+    assert admin.get("/api/auth/status").json()["first_user"] is False
+    r = g.post("/api/auth/signup", json={"email": "new@example.com", "password": "correct horse battery", "remember": False})
+    assert r.status_code == 200 and r.json()["kept_guest_desk"] is True and r.json()["user"]["id"] == me["id"]
+    assert "max-age" not in r.headers["set-cookie"].lower()                   # no "Remember me": ends with the browser
+    assert g.get("/api/auth/status").json()["user"]["role"] == "user"
+    assert [u["email"] for u in admin.get("/api/portal/users").json()] == ["owner@example.com", "new@example.com"]
+
+
+def test_remember_me_sets_a_30_day_cookie(P):
+    a = P()
+    signup(a, "owner@example.com")
+    b = P()
+    r = b.post("/api/auth/login", json={"email": "owner@example.com", "password": "correct horse battery", "remember": True})
+    assert "max-age=2592000" in r.headers["set-cookie"].lower()
+    r = b.post("/api/auth/login", json={"email": "owner@example.com", "password": "correct horse battery", "remember": False})
+    assert "max-age" not in r.headers["set-cookie"].lower()

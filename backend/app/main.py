@@ -62,6 +62,11 @@ async def lifespan(app):
         print("data backup:", backup.restore_if_empty(), flush=True)     # fresh disk after a sleep/redeploy: bring data back
     except Exception as exc:
         print("data backup restore failed:", exc, flush=True)
+    if portal.enabled():
+        try:
+            print("old guest desks removed:", portal.cleanup_guests(), flush=True)
+        except Exception as exc:
+            print("guest cleanup failed:", exc, flush=True)
     portal.for_each_tenant(lambda: ensure_db(db.data_mode()))
     backup.BACKUP.start()
     SCHED = scheduler.Scheduler()
@@ -95,6 +100,11 @@ async def deliver_alerts(request: Request, call_next):
 
 
 PUBLIC_API = ("/api/auth/",)
+# Guests (no account yet) get a view-only desk: real prices, indicators and paper trades on the local simulator. Anything
+# that touches money, keys, outside accounts, AI usage or the server's settings needs an account.
+GUEST_BLOCKED = ("/api/admin", "/api/alerts/secrets", "/api/alerts/settings", "/api/alerts/test", "/api/broker", "/api/copilot",
+                 "/api/crypto", "/api/linked", "/api/live-gate", "/api/mcp", "/api/oauth", "/api/portal", "/api/data/provider",
+                 "/api/documents/compare", "/api/strategy/research")
 
 
 @app.middleware("http")
@@ -108,6 +118,9 @@ async def portal_auth(request: Request, call_next):
         return JSONResponse(status_code=401, content={"detail": "Sign in first.", "signin": True}, headers={"Cache-Control": "no-store"})
     if request.method in ("POST", "PUT", "DELETE", "PATCH") and request.headers.get("x-swingdesk") != "1":
         return JSONResponse(status_code=403, content={"detail": "Missing X-SwingDesk header (cross-site request refused)."})
+    if user["role"] == "guest" and request.method in ("POST", "PUT", "DELETE", "PATCH") and path.startswith(GUEST_BLOCKED):
+        return JSONResponse(status_code=403, content={"detail": "Create a free account to connect brokers, exchanges and AI, or to trade real money. "
+                                                      "Guests can watch live prices and paper-trade.", "signup": True})
     request.state.user = user
     tok = db.TENANT.set(portal.tenant_dir(user["id"]))
     utok = portal.CURRENT_USER.set(user["id"])
@@ -122,11 +135,12 @@ def _me(request: Request) -> dict:
     return getattr(request.state, "user", None) or {"id": portal.LOCAL_USER, "role": "admin", "email": None}
 
 
-def _cookie(resp: JSONResponse, request: Request, token: str | None) -> JSONResponse:
+def _cookie(resp: JSONResponse, request: Request, token: str | None, remember: bool = True) -> JSONResponse:
+    """remember=True keeps the browser signed in for 30 days; False sets a cookie that ends when the browser closes."""
     secure = request.url.scheme == "https" or os.environ.get("SWINGDESK_SECURE_COOKIES", "off") == "on"
     if token:
-        resp.set_cookie(portal.SESSION_COOKIE, token, max_age=portal.SESSION_DAYS * 86400, httponly=True, samesite="lax",
-                        secure=secure, path="/")
+        resp.set_cookie(portal.SESSION_COOKIE, token, max_age=portal.SESSION_DAYS * 86400 if remember else None, httponly=True,
+                        samesite="lax", secure=secure, path="/")
     else:
         resp.delete_cookie(portal.SESSION_COOKIE, path="/")
     return resp
@@ -137,11 +151,33 @@ class SignupIn(BaseModel):
     password: str
     name: str = ""
     invite: str = ""
+    remember: bool = True
 
 
 class LoginIn(BaseModel):
     email: str
     password: str
+    remember: bool = True
+
+
+def _start_live(uid: str) -> None:
+    """New desks open on real market data (Live test, paper orders) and load prices in the background."""
+    import threading
+    with portal.as_user(uid):
+        ensure_db("demo")
+        ensure_db("live")
+        if db.get_setting("data_mode_chosen", None) is None:
+            db.set_data_mode("live")
+            db.set_setting("data_mode_chosen", True)
+
+    def warm():
+        try:
+            with portal.as_user(uid):
+                trading.run_live_refresh("first visit")
+        except Exception:
+            pass                          # the desk shows "Refresh live data" if the first load fails
+    if os.environ.get("SWINGDESK_WARM_LIVE", "on") != "off":
+        threading.Thread(target=warm, daemon=True, name=f"warm-{uid}").start()
 
 
 class InviteIn(BaseModel):
@@ -168,8 +204,8 @@ def auth_status(request: Request):
     if not portal.enabled():
         return {"portal": False, "user": None}
     user = portal.user_for_session(request.cookies.get(portal.SESSION_COOKIE))
-    first = not portal.user_ids()
-    return {"portal": True, "user": user, "first_user": first, "setup_code_required": first and bool(os.environ.get("SWINGDESK_SETUP_CODE")),
+    first = portal.real_user_count() == 0
+    return {"portal": True, "user": user, "first_user": first, "guest": bool(user and user["role"] == "guest"), "setup_code_required": first and bool(os.environ.get("SWINGDESK_SETUP_CODE")),
             "open_signup": os.environ.get("SWINGDESK_OPEN_SIGNUP", "off").lower() in ("on", "1", "true")}
 
 
@@ -177,22 +213,38 @@ def auth_status(request: Request):
 def auth_signup(body: SignupIn, request: Request):
     if not portal.enabled():
         raise HTTPException(404, "The multi-user portal is off (SWINGDESK_PORTAL=on enables it).")
-    u = portal.signup(body.email, body.password, body.name, body.invite)
-    with portal.as_user(u["id"]):
-        ensure_db("demo")
-        ensure_db("live")
-    token, u = portal.login(body.email, body.password, request.client.host if request.client else "")
+    current = portal.user_for_session(request.cookies.get(portal.SESSION_COOKIE))
+    guest_id = current["id"] if current and current["role"] == "guest" else None
+    u = portal.signup(body.email, body.password, body.name, body.invite, guest_id=guest_id)
+    if not guest_id:
+        _start_live(u["id"])
+    token, u = portal.login(body.email, body.password, request.client.host if request.client else "", remember=body.remember)
     from . import backup
     backup.BACKUP.request()                     # save the new account off-site right away
-    return _cookie(JSONResponse({"user": u}), request, token)
+    return _cookie(JSONResponse({"user": u, "kept_guest_desk": bool(guest_id)}), request, token, body.remember)
 
 
 @app.post("/api/auth/login")
 def auth_login(body: LoginIn, request: Request):
     if not portal.enabled():
         raise HTTPException(404, "The multi-user portal is off.")
-    token, u = portal.login(body.email, body.password, request.client.host if request.client else "")
-    return _cookie(JSONResponse({"user": u}), request, token)
+    token, u = portal.login(body.email, body.password, request.client.host if request.client else "", remember=body.remember)
+    return _cookie(JSONResponse({"user": u}), request, token, body.remember)
+
+
+@app.post("/api/auth/guest")
+def auth_guest(request: Request):
+    """Look around without an account: this browser gets its own desk on real prices; paper trades are kept for 30 days."""
+    if not portal.enabled():
+        raise HTTPException(404, "The multi-user portal is off.")
+    if request.headers.get("x-swingdesk") != "1":
+        raise HTTPException(403, "Missing X-SwingDesk header (cross-site request refused).")
+    current = portal.user_for_session(request.cookies.get(portal.SESSION_COOKIE))
+    if current:
+        return {"user": current}
+    token, u = portal.create_guest()
+    _start_live(u["id"])
+    return _cookie(JSONResponse({"user": u}), request, token, True)
 
 
 @app.post("/api/auth/logout")
@@ -1230,6 +1282,12 @@ def crypto_journal():
         return pnl_mod.crypto_journal(c)
     finally:
         c.close()
+
+
+@app.get("/api/portfolio")
+def portfolio_view():
+    from . import portfolio
+    return portfolio.overview()
 
 
 @app.get("/api/pnl")

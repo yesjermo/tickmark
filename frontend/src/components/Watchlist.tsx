@@ -8,7 +8,7 @@ export function Watchlist({ screen, live, selected, onSelect, onChanged, notify 
 }) {
   const [add, setAdd] = useState("");
   const [busy, setBusy] = useState(false);
-  const [quotes, setQuotes] = useState<Record<string, { price: number; t: string; change_pct: number | null }>>({});
+  const [quotes, setQuotes] = useState<Record<string, { price: number; t: string | null; feed?: string; change_pct: number | null }>>({});
   useEffect(() => {
     if (!live) { setQuotes({}); return; }
     const load = () => api.get<{ quotes: typeof quotes }>("/api/quotes").then((r) => setQuotes(r.quotes)).catch(() => {});
@@ -57,7 +57,7 @@ export function Watchlist({ screen, live, selected, onSelect, onChanged, notify 
                   <StatusChip s={r.status} />
                   {quotes[r.symbol] && (
                     <span className={`quote num ${(quotes[r.symbol].change_pct ?? 0) >= 0 ? "gain" : "loss"}`}
-                      title={`Latest trade (IEX feed) at ${et(quotes[r.symbol].t)}. Rules still use the completed daily close.`}>
+                      title={quotes[r.symbol].feed === "yahoo" ? "Latest Yahoo Finance price (may be delayed up to 15 minutes). Rules still use the completed daily close." : `Latest trade (IEX feed) at ${et(quotes[r.symbol].t!)}. Rules still use the completed daily close.`}>
                       {num(quotes[r.symbol].price)}{quotes[r.symbol].change_pct != null && ` ${quotes[r.symbol].change_pct! >= 0 ? "+" : ""}${quotes[r.symbol].change_pct}%`}
                     </span>
                   )}
@@ -91,7 +91,7 @@ export function Watchlist({ screen, live, selected, onSelect, onChanged, notify 
       </ul>
       <p className="legend small muted">
         {screen.as_of ? `Screened on the completed daily bar of ${screen.as_of}.` : "No data loaded yet."} Dots: one per rule, in order.
-        {live && " Rules use completed bars only; the colored figure is the latest trade (IEX feed, refreshed each minute)."}
+        {live && " Rules use completed bars only; the colored figure is the latest price (Alpaca IEX with a key, otherwise Yahoo), refreshed each minute."}
       </p>
     </div>
   );
