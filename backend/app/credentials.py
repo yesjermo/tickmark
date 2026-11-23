@@ -37,7 +37,13 @@ class EncryptedStore:
                 kf.write_bytes(Fernet.generate_key())
                 os.chmod(kf, 0o600)
             k = kf.read_bytes().decode()
-        return Fernet(k.encode() if isinstance(k, str) else k)
+        raw = k.encode() if isinstance(k, str) else k
+        try:
+            return Fernet(raw)
+        except ValueError:     # any other secret (e.g. a host-generated random value): derive a valid Fernet key from it
+            import base64
+            import hashlib
+            return Fernet(base64.urlsafe_b64encode(hashlib.sha256(raw).digest()))
 
     def _load(self) -> dict:
         import json

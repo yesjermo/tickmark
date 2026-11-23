@@ -3,7 +3,7 @@ import { api, ApiError } from "../api";
 
 export interface PortalUser { id: string; email: string; name: string | null; role: string }
 
-export function Login({ firstUser, openSignup, onIn }: { firstUser: boolean; openSignup: boolean; onIn: (u: PortalUser) => void }) {
+export function Login({ firstUser, openSignup, setupCode = false, onIn }: { firstUser: boolean; openSignup: boolean; setupCode?: boolean; onIn: (u: PortalUser) => void }) {
   const [mode, setMode] = useState<"in" | "up">(firstUser ? "up" : "in");
   const [f, setF] = useState({ email: "", password: "", name: "", invite: "" });
   const [err, setErr] = useState<string | null>(null);
@@ -29,7 +29,8 @@ export function Login({ firstUser, openSignup, onIn }: { firstUser: boolean; ope
           onChange={(e) => setF({ ...f, password: e.target.value })} /></label>
         {mode === "up" && <>
           <label>Name (optional) <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-          {!firstUser && !openSignup && <label>Invite code <input value={f.invite} onChange={(e) => setF({ ...f, invite: e.target.value })} /></label>}
+          {((!firstUser && !openSignup) || (firstUser && setupCode)) && <label>{firstUser ? "Setup code (from the server's settings)" : "Invite code"}
+            <input value={f.invite} autoComplete="off" onChange={(e) => setF({ ...f, invite: e.target.value })} /></label>}
           <p className="small muted">At least 10 characters. Your broker and exchange keys are stored encrypted, separately from every other user.</p>
         </>}
         {err && <p className="small loss">{err}</p>}

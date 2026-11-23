@@ -148,6 +148,10 @@ def signup(email: str, password: str, name: str = "", invite: str = "") -> dict:
     try:
         c.execute("BEGIN IMMEDIATE")
         first = c.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+        setup = os.environ.get("SWINGDESK_SETUP_CODE", "").strip()
+        if first and setup and not hmac.compare_digest((invite or "").strip(), setup):
+            c.execute("ROLLBACK")      # on a public server, only the operator (who can read the setup code) becomes admin
+            raise PortalError("Enter the setup code from the server's settings to create the administrator account.", 403)
         inv = None
         if not first and os.environ.get("SWINGDESK_OPEN_SIGNUP", "off").lower() not in ("on", "1", "true"):
             inv = c.execute("SELECT * FROM invites WHERE code_hash=? AND used_by IS NULL", (_h((invite or "").strip()),)).fetchone()

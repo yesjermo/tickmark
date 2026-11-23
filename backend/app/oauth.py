@@ -60,7 +60,8 @@ def _secret_name(provider: str) -> str:
 
 
 def redirect_uri(provider: str) -> str:
-    base = os.environ.get("SWINGDESK_OAUTH_REDIRECT_BASE", "http://127.0.0.1:8000").rstrip("/")
+    base = (os.environ.get("SWINGDESK_OAUTH_REDIRECT_BASE") or os.environ.get("SWINGDESK_PUBLIC_URL")
+            or os.environ.get("RENDER_EXTERNAL_URL") or "http://127.0.0.1:8000").rstrip("/")
     return f"{base}/api/oauth/{provider}/callback"
 
 

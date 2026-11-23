@@ -32,7 +32,7 @@ export interface Screen {
 }
 
 export default function App() {
-  const [auth, setAuth] = useState<{ portal: boolean; user: PortalUser | null; first_user?: boolean; open_signup?: boolean } | null>(null);
+  const [auth, setAuth] = useState<{ portal: boolean; user: PortalUser | null; first_user?: boolean; open_signup?: boolean; setup_code_required?: boolean } | null>(null);
   const load = () => api.get<any>("/api/auth/status").then(setAuth).catch(() => setAuth({ portal: false, user: null }));
   useEffect(() => {
     load();
@@ -41,7 +41,8 @@ export default function App() {
     return () => window.removeEventListener("swingdesk:signin", out);
   }, []);
   if (!auth) return <div className="pad muted">Loading…</div>;
-  if (auth.portal && !auth.user) return <Login firstUser={!!auth.first_user} openSignup={!!auth.open_signup} onIn={(u) => setAuth({ ...auth, user: u, first_user: false })} />;
+  if (auth.portal && !auth.user) return <Login firstUser={!!auth.first_user} openSignup={!!auth.open_signup} setupCode={!!auth.setup_code_required}
+    onIn={(u) => setAuth({ ...auth, user: u, first_user: false })} />;
   return <Desk user={auth.portal ? auth.user : null} key={auth.user?.id ?? "local"} />;
 }
 

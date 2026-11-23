@@ -353,6 +353,34 @@ In the portal, each user's tokens reach only that user's desk. Users also pick t
 
 **Checked:** against the real local server, with the **official MCP Python client (mcp 2.3.0)**: initialize (protocol 2025-06-18), tools/list (17 tools) and a tool call all worked. The test token was revoked afterwards.
 
+## Hosting on Render (public, invite-only)
+
+The repo includes a `Dockerfile` (it builds the web app, then serves the app and the API from one slim Python image) and a `render.yaml` blueprint:
+
+1. In Render, go to **New → Blueprint** and pick this repository. Render's GitHub app can read private repos once you allow it.
+2. Render builds the image and starts it with:
+   - the multi-user portal on
+   - invite-only sign-up
+   - Secure cookies
+   - a generated `SWINGDESK_MASTER_KEY` (encrypts each user's keys)
+   - a generated `SWINGDESK_SETUP_CODE`
+3. In the Render dashboard, open the service's **Environment** tab and copy `SWINGDESK_SETUP_CODE`. Open the site and create the administrator account with it. Without the code, nobody can claim the admin account, even with the public link.
+4. Invite people from the **Account** tab.
+5. Optional: add `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` and `SWINGDESK_FREE_TIER=on` in the dashboard to offer the free copilot plans. Never commit keys.
+
+**Free plan limits, before real clients rely on it:**
+- The instance **sleeps after ~15 minutes idle**; the first visit wakes it in about a minute.
+- Its **disk isn't persistent**, so accounts, journals and linked keys are **wiped on every redeploy or restart**.
+- Use a paid plan with a persistent disk mounted at `/app/data` (or another host with a volume) for anything you need to keep.
+
+**Checked locally:** the Docker image can't be built on this Mac (Docker isn't installed), so Render's build is the first real build. The second stage was reproduced instead: a fresh Python 3.13 environment with only `requirements.txt`, run with the same command and settings. Results:
+- the health check, the web app and its assets all load
+- the API refuses signed-out requests
+- the admin account can only be created with the setup code
+- the session cookie is HttpOnly and Secure
+- the first user gets their own desk
+- sign-in metadata advertises the public https address
+
 ## Brokers at a glance
 
 | Broker | Who uses it | Connects by | Paper account | Status |
@@ -595,7 +623,7 @@ Status logic: all hard rules pass → **Qualifies** (with a warning if earnings 
 
 | Integration | Status |
 |---|---|
-| FastAPI + SQLite backend, all endpoints | **Exercised** by 302 pytest tests and in the browser |
+| FastAPI + SQLite backend, all endpoints | **Exercised** by 304 pytest tests and in the browser |
 | Day trades on Alpaca Paper (bracket, flatten, day monitor) | **Tested against the fake Alpaca server**: bracket body (DAY, take-profit, stop), stop and target leg rows, target fill, stop fill, the monitor's flatten at 15:55 (and that it sends only one sell), canceling an unfilled entry, the critical alert after the close, manual flatten through the broker, swing exits skipping day trades, replay staying on the simulator, and the real-money block. In the real app the monitor thread starts, and a replay ticket (SNDK, 2026-11-20 09:50) showed its route; no order was sent. **No bracket has been placed on the real Alpaca paper API yet.** That needs market hours and a qualifying signal. |
 | Daily auto-refresh scheduler | **Exercised** by tests with a fake clock: next-run times including weekends and Thanksgiving, retries, skipping in demo mode or when off, and a scheduled 16:20 run that fills a paper order and advances the forward test. In the real server, the thread starts and reports its next run as Mon 2026-11-23 16:20 ET. **A real 16:20 run hasn't happened yet.** |
 | One-shot refresh CLI + cron | **Exercised**: installed in the user's crontab. A one-time test entry fired at 01:06 PST under cron and fetched real Yahoo data into `data/refresh.log`, so cron can reach `~/Documents`. The test entry was then removed. |

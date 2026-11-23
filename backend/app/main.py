@@ -151,13 +151,19 @@ async def portal_error(_: Request, exc):
     return JSONResponse(status_code=exc.code, content={"detail": str(exc)}, headers={"Cache-Control": "no-store"})
 
 
+@app.get("/healthz")
+def healthz():
+    """Unauthenticated liveness check for the host (Render); reveals nothing about users or data."""
+    return {"ok": True}
+
+
 @app.get("/api/auth/status")
 def auth_status(request: Request):
     if not portal.enabled():
         return {"portal": False, "user": None}
     user = portal.user_for_session(request.cookies.get(portal.SESSION_COOKIE))
     first = not portal.user_ids()
-    return {"portal": True, "user": user, "first_user": first,
+    return {"portal": True, "user": user, "first_user": first, "setup_code_required": first and bool(os.environ.get("SWINGDESK_SETUP_CODE")),
             "open_signup": os.environ.get("SWINGDESK_OPEN_SIGNUP", "off").lower() in ("on", "1", "true")}
 
 

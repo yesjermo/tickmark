@@ -28,7 +28,8 @@ def signup(c, email, invite=""):
 def test_signin_required_and_first_user_is_admin(P):
     a = P()
     assert a.get("/api/watchlist/screen").status_code == 401
-    assert a.get("/api/auth/status").json() == {"portal": True, "user": None, "first_user": True, "open_signup": False}
+    assert a.get("/api/auth/status").json() == {"portal": True, "user": None, "first_user": True, "open_signup": False,
+                                                "setup_code_required": False}
     u = signup(a, "Owner@Example.com")
     assert u["role"] == "admin" and u["email"] == "owner@example.com"
     assert a.get("/api/auth/status").json()["user"]["id"] == u["id"]
@@ -132,3 +133,28 @@ def test_mcp_in_single_user_app(client):
     r = rpc(client, tok, "tools/list")
     assert r.status_code == 200 and len(r.json()["result"]["tools"]) >= 14
     assert rpc(client, tok, "bogus/method").json()["error"]["code"] == -32601
+
+
+def test_setup_code_guards_the_first_admin_and_health_is_public(P, monkeypatch):
+    monkeypatch.setenv("SWINGDESK_SETUP_CODE", "setup-abc-123")
+    a = P()
+    assert a.get("/healthz").json() == {"ok": True}
+    assert a.get("/api/auth/status").json()["setup_code_required"] is True
+    r = a.post("/api/auth/signup", json={"email": "stranger@example.com", "password": "correct horse battery"})
+    assert r.status_code == 403 and "setup code" in r.json()["detail"]
+    r = a.post("/api/auth/signup", json={"email": "owner@example.com", "password": "correct horse battery", "invite": "setup-abc-123"})
+    assert r.status_code == 200 and r.json()["user"]["role"] == "admin"
+    assert a.get("/api/auth/status").json()["setup_code_required"] is False
+
+
+def test_any_master_secret_works_and_public_url_is_used(P, monkeypatch):
+    monkeypatch.setenv("SWINGDESK_MASTER_KEY", "aGVsbG8gdGhpcyBpcyBub3QgYSBmZXJuZXQga2V5Kys=")    # random host-generated value
+    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://tickmark.onrender.com")
+    a = P()
+    u = signup(a, "owner@example.com")
+    from app import credentials
+    with portal.as_user(u["id"]):
+        credentials.set_secret("x", "y")
+        assert credentials.get_secret("x") == "y"
+    meta = a.get("/.well-known/oauth-protected-resource").json()
+    assert meta["resource"] == "https://tickmark.onrender.com/mcp"

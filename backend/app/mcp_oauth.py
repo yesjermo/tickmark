@@ -61,7 +61,8 @@ def conn():
 
 
 def base_url(request_base: str) -> str:
-    return (os.environ.get("SWINGDESK_PUBLIC_URL") or request_base).rstrip("/")
+    # Behind a host's proxy the app sees plain http; prefer the public https address (Render sets RENDER_EXTERNAL_URL).
+    return (os.environ.get("SWINGDESK_PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or request_base).rstrip("/")
 
 
 def resource_metadata(base: str) -> dict:
