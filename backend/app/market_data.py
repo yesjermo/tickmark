@@ -5,7 +5,7 @@ Providers for completed daily bars (setting "data_provider"):
   alpaca  licensed: Alpaca Market Data API, SIP consolidated tape, split-adjusted.
           The free Alpaca plan allows SIP history for completed sessions (checked
           2026-11-22 with a paper account); IEX-only volume is ~3% of the consolidated
-          total and would distort volume rules, so SwingDesk insists on SIP and falls
+          total and would distort volume rules, so Tickmark insists on SIP and falls
           back to Yahoo (with a note) if SIP is refused.
 Earnings dates and sectors still come from Yahoo for both, because Alpaca has no
 earnings calendar; the source label says so.

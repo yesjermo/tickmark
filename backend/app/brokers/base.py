@@ -33,7 +33,7 @@ class BrokerResult:
 
 
 class BrokerAdapter:
-    """The contract every broker implements. SwingDesk's rules, risk checks, journal,
+    """The contract every broker implements. Tickmark's rules, risk checks, journal,
     reconciliation and alerts only ever call these methods.
 
     Results are normalised to BrokerResult with the app's status vocabulary; an entry's

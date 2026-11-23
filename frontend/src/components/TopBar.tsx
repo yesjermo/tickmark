@@ -83,7 +83,7 @@ export function TopBar({ status, level, setLevel, onChanged, notify, tick, openP
   return (
     <header className={`topbar ws-${ws ?? "loading"}`}>
       <div className="tb-row">
-        <div className="brand"><span className="logo" aria-hidden>◢</span> SwingDesk</div>
+        <div className="brand"><span className="logo" aria-hidden>◢</span> Tickmark</div>
 
         <nav className="workspaces" aria-label="Workspace">
           {WS.map(({ id, label, hint, Icon }) => (

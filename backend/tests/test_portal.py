@@ -107,7 +107,7 @@ def test_mcp_server_per_user_tokens_and_proposals(P):
     m = P()
     assert rpc(m, None, "initialize").status_code == 401
     init = rpc(m, tok, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}).json()
-    assert init["result"]["protocolVersion"] == "2025-06-18" and init["result"]["serverInfo"]["name"] == "swingdesk"
+    assert init["result"]["protocolVersion"] == "2025-06-18" and init["result"]["serverInfo"]["name"] == "tickmark"
     assert m.post("/mcp", json={"jsonrpc": "2.0", "method": "notifications/initialized"}, headers={"Authorization": f"Bearer {tok}"}).status_code == 202
     names = {t["name"] for t in rpc(m, tok, "tools/list").json()["result"]["tools"]}
     assert "get_overview" in names and not any("submit" in n or "kill" in n for n in names)

@@ -191,7 +191,7 @@ def preview(aid: str, symbol: str, side: str, notional: float | None = None, amo
           "order_type": order_type, "amount": amt, "price": px, "limit_price": float(limit_price) if limit_price else None,
           "est_cost": round(cost, 2), "stop_price": stop, "est_loss_if_stopped": loss, "bid": bid, "ask": ask, "last": last,
           "checks": checks, "blocked": any(x["result"] == "block" for x in checks),
-          "stop_note": ("After the buy fills, SwingDesk places a stop sell for the filled amount at the exchange."
+          "stop_note": ("After the buy fills, Tickmark places a stop sell for the filled amount at the exchange."
                         if stop else "No protective stop."),
           "fill_disclaimer": "Crypto trades 24/7 and can move fast; a market order fills at the exchange's price, which can differ from this preview.",
           "expires_at": (datetime.now(timezone.utc) + PREVIEW_TTL).isoformat(timespec="seconds")}

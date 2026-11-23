@@ -1,7 +1,7 @@
 """Linked accounts: read-only views of other brokers, exchanges and wallets.
 
-The trading broker (Broker tab: simulator, Alpaca, IBKR) is where SwingDesk sends orders.
-Linked accounts are different: SwingDesk only *reads* balances and positions from them, so the
+The trading broker (Broker tab: simulator, Alpaca, IBKR) is where Tickmark sends orders.
+Linked accounts are different: Tickmark only *reads* balances and positions from them, so the
 journal, risk view and copilot can see the whole picture. No order code exists here.
 
 Providers
@@ -69,7 +69,7 @@ PROVIDERS = {
              "fields": [F("host", "OpenD host", default="127.0.0.1"), F("port", "OpenD port", default="11111"),
                         F("firm", "Broker entity", default="FUTUINC", placeholder="FUTUINC (moomoo US), FUTUSECURITIES (HK), FUTUSG, FUTUAU…"),
                         F("market", "Market", default="US", placeholder="US or HK")],
-             "help": "Install and run moomoo/Futu OpenD and log in there; SwingDesk connects to it locally. Paper (simulate) account by default. Needs: pip install futu-api (or moomoo-api)."},
+             "help": "Install and run moomoo/Futu OpenD and log in there; Tickmark connects to it locally. Paper (simulate) account by default. Needs: pip install futu-api (or moomoo-api)."},
     "phantom": {"kind": "solana", "name": "Phantom wallet (Solana, watch-only)", "sandbox": False,
                 "fields": [F("address", "Public wallet address"), F("rpc_url", "Solana RPC URL", default="https://api.mainnet-beta.solana.com")],
                 "help": "Paste only the PUBLIC address (Phantom → Receive → copy). Never enter a seed phrase or private key anywhere. The address is sent to the Solana RPC you choose."},

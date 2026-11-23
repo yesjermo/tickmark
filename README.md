@@ -1,4 +1,4 @@
-# SwingDesk
+# Tickmark
 
 **Project page:** https://yesjermo.github.io/tickmark-site/ (this repository, `tickmark`, is private; the page is published from the public `tickmark-site` repo).
 
@@ -6,7 +6,7 @@ A working prototype of a broker-connected research and paper-trading assistant f
 
 > **Why did this stock qualify under my rules, what evidence supports that answer, and what happened after I acted on it?**
 
-The trader writes a setup in plain English. SwingDesk turns it into explicit, versioned rules, screens a watchlist, shows the evidence behind every pass, fail and unknown result, previews and submits a **paper** order, simulates what happens next, and records everything in a journal that can't be rewritten later.
+The trader writes a setup in plain English. Tickmark turns it into explicit, versioned rules, screens a watchlist, shows the evidence behind every pass, fail and unknown result, previews and submits a **paper** order, simulates what happens next, and records everything in a journal that can't be rewritten later.
 
 It has two data modes, switched in the top bar:
 
@@ -69,7 +69,7 @@ Click **Live data** in the top bar. The first switch fetches about two years of 
 
   It exits with 0 on success, 1 if the app is in demo mode, and 2 if any ticker failed. Running it while the server is also running is safe: sessions are only processed once.
 
-  **Installed on this Mac (2026-11-22)** as `20 13 * * 1-5` (13:20 Pacific = 16:20 ET; both zones change clocks on the same dates). Output goes to `backend/data/refresh.log`. To see it, run `crontab -l`. To remove it, run `crontab -e` and delete the SwingDesk lines.
+  **Installed on this Mac (2026-11-22)** as `20 13 * * 1-5` (13:20 Pacific = 16:20 ET; both zones change clocks on the same dates). Output goes to `backend/data/refresh.log`. To see it, run `crontab -l`. To remove it, run `crontab -e` and delete the Tickmark lines.
 - **Refresh live data** pulls new sessions on demand. Each new session runs through the paper simulator in order: pending entries fill at that day's real open, stops check that day's real low, and planned exits use the real close.
 - **Editable watchlist** (1–12 tickers). Add or remove symbols in the left panel.
 - **Provider problems are shown, not hidden.** A ticker whose fetch fails keeps its cached bars, is marked *stale*, and drops to *Missing info*. A bar Yahoo returns without a close (this happened to SNDK on 2026-11-20 during testing) is labelled "provider gap" rather than filled in.
@@ -149,7 +149,7 @@ A test checks the tool list for these. Rule and limit changes the copilot propos
 
 ## Linked accounts (read-only): crypto exchanges, Robinhood Crypto, moomoo/Futu, Phantom
 
-In the Broker tab, **Linked accounts** lets SwingDesk *read* balances and positions from other places. The copilot sees them through `get_linked_accounts`, and there's a combined USD total. No order code exists for these. Orders still go only to the trading broker (simulator, Alpaca or IBKR).
+In the Broker tab, **Linked accounts** lets Tickmark *read* balances and positions from other places. The copilot sees them through `get_linked_accounts`, and there's a combined USD total. No order code exists for these. Orders still go only to the trading broker (simulator, Alpaca or IBKR).
 
 | Provider | How it connects | Test account | Checked from this Mac (2026-11-22) |
 |---|---|---|---|
@@ -168,7 +168,7 @@ In the Broker tab, **Linked accounts** lets SwingDesk *read* balances and positi
 - **Fidelity:** no public trading API.
 - **Webull:** its OpenAPI needs an application approved by Webull.
 
-All three are listed as planned through the SnapTrade aggregator. **Phantom** is a self-custody wallet with no broker API, so it's watch-only. SwingDesk never asks for a seed phrase or private key.
+All three are listed as planned through the SnapTrade aggregator. **Phantom** is a self-custody wallet with no broker API, so it's watch-only. Tickmark never asks for a seed phrase or private key.
 
 **Security:**
 - Secrets go in the system keychain. The browser only ever sees non-secret fields.
@@ -195,7 +195,7 @@ Previews expire after 2 minutes.
 
 **Submit.** Needs an explicit confirm. The preview id is the client order id, which blocks duplicates both locally and at the exchange. The order row is reserved first, then the exchange is called outside the database transaction.
 
-**Stops.** Once a buy with a stop has filled, SwingDesk places a stop sell for the filled amount at the exchange. It's placed only once. If the exchange refuses it, a critical alert says the position has no stop.
+**Stops.** Once a buy with a stop has filled, Tickmark places a stop sell for the filled amount at the exchange. It's placed only once. If the exchange refuses it, a critical alert says the position has no stop.
 
 **Close and cancel.** **Close** cancels the stop first, then sells the filled amount at market. **Cancel** cancels a working order.
 
@@ -234,9 +234,9 @@ Like an IDE copilot, there's a free tier with a limit, a free open-source option
 A "message" is one question, however many lookups it takes. Usage is metered per user, in `portal.db`, and shown as a bar under the model picker. When the free allowance runs out, the copilot says when it resets and suggests the alternatives. With no key of their own, people start on whichever included plan the server offers.
 
 **Using your Claude plan instead.** Claude and ChatGPT subscriptions can't be used by other apps directly: the providers don't allow it. The supported way round it is the reverse direction:
-1. In Claude, add SwingDesk as a **custom connector** (this server's `/mcp` URL).
-2. Sign in to SwingDesk and click **Allow**.
-3. From then on, Claude uses SwingDesk's tools, and the AI usage counts against your Claude plan.
+1. In Claude, add Tickmark as a **custom connector** (this server's `/mcp` URL).
+2. Sign in to Tickmark and click **Allow**.
+3. From then on, Claude uses Tickmark's tools, and the AI usage counts against your Claude plan.
 
 This uses MCP's OAuth sign-in:
 - discovery (`/.well-known/oauth-protected-resource` and `/oauth-authorization-server`)
@@ -255,7 +255,7 @@ Connected apps are listed in the Account tab, where you can disconnect them. The
 - **Public address:** Phantom.
 - **AI:** copilot plans, and connectors and tokens for AI apps.
 
-Signing in only lets SwingDesk read the account. Real-money trading needs that account's own switch.
+Signing in only lets Tickmark read the account. Real-money trading needs that account's own switch.
 
 ## Interface
 
@@ -281,7 +281,7 @@ Crypto quoted in USDT or USDC counts as dollars. Other quote currencies are list
 
 ## Multi-user portal (hosted)
 
-Run with `SWINGDESK_PORTAL=on` to serve SwingDesk to several people:
+Run with `SWINGDESK_PORTAL=on` to serve Tickmark to several people:
 - **Sign-in:** email and password, hashed with scrypt. Sessions are 14-day HttpOnly, SameSite=Lax cookies.
 - **CSRF protection:** every change must carry the `X-SwingDesk` header.
 - **Lockout:** sign-in locks for 15 minutes after 5 failures.
@@ -300,10 +300,10 @@ Run with `SWINGDESK_PORTAL=on` to serve SwingDesk to several people:
 
 ## Connect AI apps (MCP)
 
-SwingDesk is an **MCP server** at `POST /mcp` (Streamable HTTP, JSON responses). In the **AI apps** tab (called **Account** in the portal), create a personal token, then for example:
+Tickmark is an **MCP server** at `POST /mcp` (Streamable HTTP, JSON responses). In the **AI apps** tab (called **Account** in the portal), create a personal token, then for example:
 
 ```bash
-claude mcp add --transport http swingdesk http://localhost:8000/mcp --header "Authorization: Bearer sdk_..."
+claude mcp add --transport http tickmark http://localhost:8000/mcp --header "Authorization: Bearer sdk_..."
 ```
 
 Connected apps get the copilot's 17 tools:
@@ -335,15 +335,15 @@ Every broker plugs into the same adapter contract (`app/brokers/base.py`, picked
 ## Connecting a broker (Alpaca Paper)
 
 1. Create a free Alpaca account and open the **paper trading** dashboard. Generate an API key ID and secret.
-2. Switch SwingDesk to **Live data**. Broker orders are refused on simulated prices.
-3. Open the **Broker** tab, paste both keys and click **Test and save**. SwingDesk calls Alpaca's account endpoint first and saves only if that works. The keys go into this computer's **system keychain**, not the database, a file or the browser. The UI only ever shows a masked hint such as `PK…1234`. Live-trading URLs are refused.
+2. Switch Tickmark to **Live data**. Broker orders are refused on simulated prices.
+3. Open the **Broker** tab, paste both keys and click **Test and save**. Tickmark calls Alpaca's account endpoint first and saves only if that works. The keys go into this computer's **system keychain**, not the database, a file or the browser. The UI only ever shows a masked hint such as `PK…1234`. Live-trading URLs are refused.
 4. Click **Send orders to Alpaca**. From then on:
    - **Sizing** uses the broker's real equity and buying power.
    - **Entries** go out with an attached stop (GTC, so the stop doesn't expire after one day). The preview id is sent as Alpaca's `client_order_id`, so a double submit can't create two orders, even at the broker.
    - **Fills, the stop leg and exits sync** from Alpaca on every refresh and whenever the Orders panel loads. The journal's P&L and plan adherence come from the broker's own fills.
    - **Planned exits** go out automatically at **3:40 PM ET** on the exit date as market-on-close orders. The stop is canceled first, because Alpaca holds shares for an open stop and would reject the sell. If that window is missed, a market exit goes out at the next run. **Send due exits** does the same on demand.
    - **Close now** cancels the stop, sends a market sell and records a plan deviation.
-5. **Reconciliation** runs after every refresh, and on demand from the Broker tab. It compares broker positions and open orders with the journal and flags: positions not in the journal (trades made outside SwingDesk), quantity mismatches, journal positions missing at the broker, **positions with no stop**, local orders not open at the broker, and broker orders SwingDesk didn't place. In simulator mode it self-checks that every open position has a stop and a planned exit.
+5. **Reconciliation** runs after every refresh, and on demand from the Broker tab. It compares broker positions and open orders with the journal and flags: positions not in the journal (trades made outside Tickmark), quantity mismatches, journal positions missing at the broker, **positions with no stop**, local orders not open at the broker, and broker orders Tickmark didn't place. In simulator mode it self-checks that every open position has a stop and a planned exit.
 
 **Disconnect** deletes the keys from the keychain and switches back to the local simulator. Orders already at Alpaca stay there.
 
@@ -455,11 +455,11 @@ In Live data mode, pick the source from the **LIVE** indicator in the top bar:
 | **Yahoo Finance** | Free, through the unofficial `yfinance` client | Research use only. Occasional gaps; for example SNDK's 11-20 bar arrived without a close. |
 | **Alpaca SIP** | Licensed. The consolidated tape (all US exchanges) from Alpaca's Market Data API, split-adjusted. | Uses your Alpaca keys. The free Alpaca plan includes SIP history for completed sessions. |
 
-Why SIP and not IEX: IEX-only volume is about 3% of the real total (NVDA on 11-20: 17.7M vs 634M shares), which would wreck the "lighter volume" rule. If Alpaca ever refuses SIP, SwingDesk falls back to Yahoo and says why.
+Why SIP and not IEX: IEX-only volume is about 3% of the real total (NVDA on 11-20: 17.7M vs 634M shares), which would wreck the "lighter volume" rule. If Alpaca ever refuses SIP, Tickmark falls back to Yahoo and says why.
 
 Earnings dates and sectors still come from Yahoo for both sources, because Alpaca has no earnings calendar. The data label says so.
 
-**Stock splits** are looked up on every refresh (Alpaca corporate actions when connected, otherwise Yahoo's split history). When a split takes effect for a stock you hold or have a working order in, SwingDesk:
+**Stock splits** are looked up on every refresh (Alpaca corporate actions when connected, otherwise Yahoo's split history). When a split takes effect for a stock you hold or have a working order in, Tickmark:
 - rescales the local fills, the order quantities and prices, the stop and any forward-test levels, so they match the split-adjusted prices and the broker's adjusted position
 - applies each split once and records it
 - raises an alert
@@ -469,9 +469,9 @@ Earnings dates and sectors still come from Yahoo for both sources, because Alpac
 
 ## Real-time order updates
 
-When orders go to a broker, SwingDesk follows them live:
+When orders go to a broker, Tickmark follows them live:
 - **Alpaca:** a websocket to Alpaca's `trade_updates` stream (paper, or live behind the gate), using the protocol in Alpaca's docs: `auth`, then `listen` for `trade_updates`, with binary JSON events. Each event carries the full order, which is applied straight to the local orders, the stop leg and the journal. Fills, stop-outs and exits reach the journal, alerts and the screen within seconds.
-- **Reconnects** use exponential backoff, and every reconnect starts with a full sync, so nothing missed while offline is lost. An event for an order SwingDesk doesn't know triggers a full sync too.
+- **Reconnects** use exponential backoff, and every reconnect starts with a full sync, so nothing missed while offline is lost. An event for an order Tickmark doesn't know triggers a full sync too.
 - **Interactive Brokers:** polled every 10 seconds during market hours and every 5 minutes otherwise. IBKR's websocket order topic needs gateway session cookies and is a later step.
 - **The screen updates itself.** The UI listens on `/api/stream` (Server-Sent Events), so pushed fills, scheduled jobs and changes made in another window or from the command line refresh it without a reload. The top bar shows **Live order updates** (green) or **reconnecting** (amber) whenever a broker is active.
 
@@ -508,7 +508,7 @@ The paper track record (closed trades, plan adherence, last reconciliation) is *
 
 Use trade-only API keys. Never grant withdrawal permission.
 
-**Not possible:** Fidelity has no public trading API, and Robinhood stocks and options have no public API (unofficial ones break Robinhood's terms). SwingDesk can't place orders there.
+**Not possible:** Fidelity has no public trading API, and Robinhood stocks and options have no public API (unofficial ones break Robinhood's terms). Tickmark can't place orders there.
 
 **This path has only been tested against the fake broker server.**
 
@@ -572,7 +572,7 @@ Status logic: all hard rules pass → **Qualifies** (with a warning if earnings 
 | Paper-to-live gate | **Tested against the fake broker server**: locked when not eligible, live keys refused until eligible, the exact phrase required, orders sent to the live host only once enabled, the ticker required per order, a separate real-money journal, and switching to Demo turns it off. **Never run against a live account.** |
 | Broker catalogue | Endpoint tested. The Broker tab lists all brokers with their connection method and phase. |
 | Licensed market data (Alpaca SIP) | **Exercised against the real Alpaca Market Data API on 2026-11-22** with the user's paper keys (read-only): two years of SIP split-adjusted daily bars for the watchlist, with pagination; corporate actions (NVDA's 10-for-1 split from 2024); and the UI switch to Alpaca SIP, which filled SNDK's missing Yahoo close. Split adjustment of open positions, the SIP-refused fallback and the quality checks are **tested against fakes**. The quality monitor was checked on real Yahoo data, where it flagged SNDK's missing 11-20 close. |
-| Streaming order updates | **Real Alpaca paper stream exercised on 2026-11-22**: SwingDesk authenticated, `trade_updates` was acknowledged, the catch-up sync ran and the UI showed "Live order updates". No order events arrived (no orders were placed). Event handling (fill, stop-leg fill, unknown order, reconnect and catch-up, bad keys) is **tested against a local websocket server** that speaks the documented protocol. In the browser, the UI refreshed itself after a change made from the command line. IBKR polling is tested with stand-ins. |
+| Streaming order updates | **Real Alpaca paper stream exercised on 2026-11-22**: Tickmark authenticated, `trade_updates` was acknowledged, the catch-up sync ran and the UI showed "Live order updates". No order events arrived (no orders were placed). Event handling (fill, stop-leg fill, unknown order, reconnect and catch-up, bad keys) is **tested against a local websocket server** that speaks the documented protocol. In the browser, the UI refreshed itself after a change made from the command line. IBKR polling is tested with stand-ins. |
 | Interactive Brokers adapter | **Tested against a fake gateway** (contract suite plus a full lifecycle through the app: reply confirmation, bracket stop, fill sync, exit at 3:40, reconciliation). Refuses non-paper accounts. In the browser, the panel's error handling was checked against this Mac's real port 5000 (AirPlay), which gave the hint in about 4 seconds. **Never run against a real IBKR gateway.** |
 | OAuth sign-in framework | **Tested against a fake token server**: state checks, PKCE, the code exchange, refresh, single-use state and the re-login alert. Not connected to a real Schwab, Tradier or TradeStation account (they need registered app credentials). |
 | Pre-trade risk engine | **Exercised** in tests and in the browser: a soft block on the ticket was overridden with a reason, logged, and shown in the Risk tab and the journal |
@@ -610,8 +610,8 @@ An independent code review found 12 issues. These are fixed, each with a regress
 - Split handling covers open positions, working orders and forward signals. Closed trades keep their original numbers, so their prices no longer match the split-adjusted chart history.
 - Alpaca's daily bars may include extended-hours trades, while Yahoo's are regular-session only. Volumes and highs/lows can differ slightly between the two sources.
 - The cron job reads the Alpaca keys from the keychain. If macOS blocks keychain access in the background, that refresh falls back to Yahoo and records why.
-- IBKR order status is polled (every 10 s in market hours), not streamed. Alpaca's is streamed while SwingDesk is running; while it's closed, nothing is followed until the next start, when the catch-up sync runs.
-- If SwingDesk isn't running at 3:40 PM ET on an exit date, the planned exit goes out as a market order at the next run, so it fills at a later price than the planned close. The cron job refreshes data but doesn't send broker exits.
+- IBKR order status is polled (every 10 s in market hours), not streamed. Alpaca's is streamed while Tickmark is running; while it's closed, nothing is followed until the next start, when the catch-up sync runs.
+- If Tickmark isn't running at 3:40 PM ET on an exit date, the planned exit goes out as a market order at the next run, so it fills at a later price than the planned close. The cron job refreshes data but doesn't send broker exits.
 - Partial broker fills on exits are handled when they finish. A sell that stays partially filled at the end of the day is left for the next sync. P&L and plan adherence are computed for simulator trades.
 
 ## More

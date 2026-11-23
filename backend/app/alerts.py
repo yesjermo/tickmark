@@ -82,7 +82,7 @@ def _desktop(title: str, body: str) -> None:
     if sys.platform != "darwin":
         raise RuntimeError("desktop notifications are only implemented for macOS")
     esc = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')[:240]  # noqa: E731
-    _runner(["osascript", "-e", f'display notification "{esc(body)}" with title "SwingDesk" subtitle "{esc(title)}"'],
+    _runner(["osascript", "-e", f'display notification "{esc(body)}" with title "Tickmark" subtitle "{esc(title)}"'],
             check=True, timeout=10, capture_output=True)
 
 
@@ -103,7 +103,7 @@ def _email(title: str, body: str) -> None:
     if not (s["smtp_host"] and s["smtp_user"] and s["email_to"] and pw):
         raise RuntimeError("email needs SMTP host, user, password and a To address")
     msg = EmailMessage()
-    msg["Subject"], msg["From"], msg["To"] = f"SwingDesk: {title}", s["smtp_user"], s["email_to"]
+    msg["Subject"], msg["From"], msg["To"] = f"Tickmark: {title}", s["smtp_user"], s["email_to"]
     msg.set_content(body or title)
     with SMTP_FACTORY(s["smtp_host"], s["smtp_port"], timeout=15) as smtp:
         smtp.starttls()

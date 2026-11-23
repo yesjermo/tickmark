@@ -1,8 +1,8 @@
-"""OAuth 2.1 for MCP clients: lets people use SwingDesk from inside Claude (or another MCP app) on their own AI plan.
+"""OAuth 2.1 for MCP clients: lets people use Tickmark from inside Claude (or another MCP app) on their own AI plan.
 
 Flow (MCP authorization spec): the AI app finds the authorization server through
 /.well-known/oauth-protected-resource, registers itself (dynamic client registration), sends the user to
-/oauth/authorize, where they sign in to SwingDesk and approve, then swaps the code (PKCE S256 required) for an
+/oauth/authorize, where they sign in to Tickmark and approve, then swaps the code (PKCE S256 required) for an
 access token (1 hour) and a rotating refresh token (30 days). /mcp accepts these tokens like personal tokens, and
 the same guardrails apply: read the desk and draft proposals, never trade.
 
@@ -25,7 +25,7 @@ from . import portal
 ACCESS_TTL = timedelta(hours=1)
 REFRESH_TTL = timedelta(days=30)
 CODE_TTL = timedelta(minutes=10)
-SCOPE = "swingdesk"
+SCOPE = "tickmark"
 
 
 class OAuthError(Exception):
@@ -66,7 +66,7 @@ def base_url(request_base: str) -> str:
 
 def resource_metadata(base: str) -> dict:
     return {"resource": f"{base}/mcp", "authorization_servers": [base], "scopes_supported": [SCOPE],
-            "bearer_methods_supported": ["header"], "resource_name": "SwingDesk"}
+            "bearer_methods_supported": ["header"], "resource_name": "Tickmark"}
 
 
 def server_metadata(base: str) -> dict:
@@ -141,19 +141,19 @@ def consent_page(rid: str, params: dict, who: str) -> str:
     e = html.escape
     host = urlparse(params["redirect_uri"]).hostname or ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Connect to SwingDesk</title><style>
+<title>Connect to Tickmark</title><style>
 :root{{color-scheme:dark}}body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#0e1115;color:#e4e7eb;font:15px/1.5 system-ui,sans-serif;padding:16px}}
 .card{{max-width:440px;width:100%;background:#151920;border:1px solid #272e38;border-radius:10px;padding:24px}}
 h1{{font-size:19px;margin:0 0 6px}}ul{{padding-left:18px;color:#c9ced6}}.muted{{color:#8a93a2;font-size:13px}}
 .row{{display:flex;gap:10px;margin-top:18px}}button{{flex:1;padding:10px;border-radius:7px;border:1px solid #272e38;font:inherit;cursor:pointer}}
 .ok{{background:#5ea8e8;color:#07121d;border-color:#5ea8e8;font-weight:600}}.no{{background:none;color:#e4e7eb}}</style></head>
 <body><form class="card" method="post" action="/oauth/authorize"><input type="hidden" name="request_id" value="{e(rid)}">
-<h1>Connect {e(params['client_name'])} to SwingDesk?</h1>
+<h1>Connect {e(params['client_name'])} to Tickmark?</h1>
 <p class="muted">Signed in as {e(who)}. It will return to {e(host)}.</p>
 <p>It will be able to:</p><ul><li>read your desk: watchlist screen, rule evidence, indicators, positions, journal, risk limits</li>
-<li>draft proposals (rule changes, orders, exits) that wait for you in SwingDesk</li></ul>
+<li>draft proposals (rule changes, orders, exits) that wait for you in Tickmark</li></ul>
 <p>It <b>can't</b> place, cancel or close orders, change limits or keys, or move money.</p>
-<p class="muted">Its AI usage is billed to your plan with that app, not to SwingDesk. Revoke access any time in SwingDesk → Account.</p>
+<p class="muted">Its AI usage is billed to your plan with that app, not to Tickmark. Revoke access any time in Tickmark → Account.</p>
 <div class="row"><button class="no" name="decision" value="deny">Cancel</button><button class="ok" name="decision" value="approve">Allow</button></div>
 </form></body></html>"""
 

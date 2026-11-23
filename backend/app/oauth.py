@@ -3,7 +3,7 @@
 1. /api/oauth/{provider}/start  -> returns the broker's authorize URL (with state + PKCE challenge)
 2. user logs in on the broker's site and approves
 3. broker redirects to /api/oauth/{provider}/callback?code=..&state=..
-4. SwingDesk exchanges the code for tokens and stores them in the system keychain
+4. Tickmark exchanges the code for tokens and stores them in the system keychain
 5. access tokens are refreshed automatically; an alert fires before the refresh token
    expires (e.g. Schwab requires logging in again about every 7 days)
 
@@ -144,7 +144,7 @@ def callback(provider: str, code: str, state: str) -> dict:
     entry = pending.pop(state, None)
     db.set_setting("oauth_pending", pending)
     if not entry or entry["provider"] != provider or entry["at"] < int(time.time()) - STATE_TTL:
-        raise ValueError("This sign-in link is invalid or expired. Start again from SwingDesk.")
+        raise ValueError("This sign-in link is invalid or expired. Start again from Tickmark.")
     form = {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri(provider)}
     if PROVIDERS[provider]["pkce"]:
         form["code_verifier"] = entry["verifier"]

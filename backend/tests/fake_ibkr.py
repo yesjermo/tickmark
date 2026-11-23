@@ -1,4 +1,4 @@
-"""A stateful stand-in for IBKR's Client Portal gateway (the endpoints SwingDesk uses).
+"""A stateful stand-in for IBKR's Client Portal gateway (the endpoints Tickmark uses).
 
 Mirrors the documented shapes (orders body {"orders": [...]}, the order-reply
 confirmation step, /iserver/account/orders fields, ledger) plus the unconfirmed ones

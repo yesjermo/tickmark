@@ -2,8 +2,8 @@
 
 How a user connects: download IBKR's Client Portal Gateway, start it, log in at
 https://localhost:5000 in a browser (IBKR handles the password and two-factor),
-then click "Check connection" in SwingDesk. No IBKR credentials are stored by
-SwingDesk; the gateway holds the session.
+then click "Check connection" in Tickmark. No IBKR credentials are stored by
+Tickmark; the gateway holds the session.
 
 Safety: paper accounts (IDs starting "DU") by default. A live account is accepted only after
 real-money trading was enabled for IBKR through the live switch (app/live_gate.py).

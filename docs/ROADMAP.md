@@ -1,6 +1,6 @@
 # Roadmap: from prototype to a broker-connected platform
 
-SwingDesk today has:
+Tickmark today has:
 - versioned rules with cited evidence
 - live Yahoo daily data, a forward test and a daily auto-refresh
 - paper orders through a local simulator, or through Alpaca with keys kept in the keychain
@@ -35,7 +35,7 @@ Built: the adapter contract and factory (every broker call goes through them), `
 
 ### 2.2 Broker adapters, by reach
 1. ✅ **Interactive Brokers** (paper) through the Client Portal Gateway, built 2026-11-22 and tested against a fake gateway. Next: run it against a real paper gateway, and confirm brackets, positions and contract search against the gateway's own docs. A TWS socket adapter is a later option.
-2. **Charles Schwab Trader API** (OAuth). The largest US retail base. It has no API paper account, so the gate requires paper trades in SwingDesk's simulator first.
+2. **Charles Schwab Trader API** (OAuth). The largest US retail base. It has no API paper account, so the gate requires paper trades in Tickmark's simulator first.
 3. **Tradier** and **TradeStation** (OAuth, with sandbox or SIM accounts).
 4. **SnapTrade aggregator** for Robinhood, Fidelity, Webull, Vanguard and others: holdings and order sync for the journal and reconciliation, with trading wherever the broker allows it.
 5. E*TRADE and moomoo as demand dictates.
@@ -75,6 +75,6 @@ Built: the adapter contract and factory (every broker call goes through them), `
 2. **Phase 2.2.2-2.2.3:** Schwab, Tradier and TradeStation adapters on top of the sign-in framework, once their app registrations exist.
 3. Day trading follow-ups: ✅ Alpaca Paper brackets with a 15:55 flatten and a server-side day monitor (2026-11-22, fake-server tested). Still to do: a first real Alpaca paper day trade, IBKR brackets, and historical quotes for replay.
 4. ✅ Copilot (2026-11-22): Claude chat that reads the desk and drafts proposals you apply; tested with a fake client. Next: run it with a real key, stream replies, and add proposal analytics (how often proposals were applied and how they worked out).
-4b. ✅ 2026-11-22: crypto in the journal and P&L stats, per-account real-money switches (Alpaca, IBKR, OKX/Coinbase/Kraken, Robinhood Crypto), the multi-user portal, and SwingDesk as an MCP server. Next: run each live venue once with real keys and small size; OAuth sign-in for MCP clients; Postgres and a KMS for hosting; SnapTrade for read-only Fidelity and Robinhood stocks.
+4b. ✅ 2026-11-22: crypto in the journal and P&L stats, per-account real-money switches (Alpaca, IBKR, OKX/Coinbase/Kraken, Robinhood Crypto), the multi-user portal, and Tickmark as an MCP server. Next: run each live venue once with real keys and small size; OAuth sign-in for MCP clients; Postgres and a KMS for hosting; SnapTrade for read-only Fidelity and Robinhood stocks.
 5. Phase 2.6: the portfolio view (exposure, correlation, VaR), and execution analytics comparing real fills with the plan.
 6. IBKR's websocket order topic, replacing its 10 s polling.

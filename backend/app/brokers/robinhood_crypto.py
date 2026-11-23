@@ -2,7 +2,7 @@
 
 Official API (no sandbox): every request is signed with the user's Ed25519 private key:
   x-api-key, x-timestamp, x-signature = base64(Ed25519.sign(api_key + timestamp + path + method + body))
-Symbols are "BTC-USD" at Robinhood and "BTC/USD" here. Client order ids must be UUIDs, so SwingDesk's
+Symbols are "BTC-USD" at Robinhood and "BTC/USD" here. Client order ids must be UUIDs, so Tickmark's
 preview id is mapped to a deterministic UUID (uuid5): the same preview always maps to the same id, which keeps
 duplicate protection at the exchange.
 

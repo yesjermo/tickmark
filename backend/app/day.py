@@ -186,7 +186,7 @@ def route(conn, mode: str) -> dict:
     if not intraday.live_cursor()[2]:
         return {"broker": None, "label": label, "why": "The market is closed.", "blocked": True}
     return {"broker": bm, "label": label,
-            "why": f"Sent to {label} paper as a bracket (entry, take-profit and stop; DAY orders). SwingDesk sells anything still open at the flat-by time."}
+            "why": f"Sent to {label} paper as a bracket (entry, take-profit and stop; DAY orders). Tickmark sells anything still open at the flat-by time."}
 
 
 def preview(symbol: str, qty_override: int | None = None) -> dict:

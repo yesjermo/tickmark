@@ -2,7 +2,7 @@
 
 Crypto P&L is computed from the exchange's own fills in crypto_orders:
   realized = sum(exit filled x exit average) - entry average x closed amount - fees in the quote currency
-An entry (a buy placed through SwingDesk) is closed once its stop or close order has filled the bought amount.
+An entry (a buy placed through Tickmark) is closed once its stop or close order has filled the bought amount.
 Stablecoin quotes (USDT, USDC) are counted as dollars; other quotes are reported but not added to the dollar totals.
 """
 from __future__ import annotations

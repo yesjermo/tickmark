@@ -3,7 +3,7 @@
 Start from a fresh state: click **Reset demo** in the top bar (or run `./run.sh` on a new checkout). The view should be in Beginner mode.
 
 **0:00 – Orientation (10 s)**
-"This is SwingDesk. Top bar: we're in **paper** mode on the local simulator, and every price here is **simulated**. Data runs through the 2026-11-20 close."
+"This is Tickmark. Top bar: we're in **paper** mode on the local simulator, and every price here is **simulated**. Data runs through the 2026-11-20 close."
 
 **0:10 – Plain English to explicit rules (25 s)**
 Strategy tab. Point at the sentence: *pulled back to the 9-day EMA on lighter volume… flag earnings before my planned exit.*

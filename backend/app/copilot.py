@@ -1,4 +1,4 @@
-"""SwingDesk Copilot: a chat assistant on Claude that reads the desk and drafts proposals.
+"""Tickmark Copilot: a chat assistant on Claude that reads the desk and drafts proposals.
 
 What it can do
   * Read: the watchlist screen, rule evidence, indicators, strategies, positions and
@@ -57,7 +57,7 @@ class CopilotError(Exception):
         self.code = code
 
 
-SYSTEM = """You are SwingDesk Copilot, the assistant inside a swing- and day-trading research desk.
+SYSTEM = """You are Tickmark Copilot, the assistant inside a swing- and day-trading research desk.
 
 How you work
 - Use the tools to look things up before answering. Every price, level, percentage or count you state must come from a tool result in this conversation; if a number isn't available, say so instead of estimating.

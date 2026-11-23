@@ -107,7 +107,7 @@ class AlpacaPaperBroker(BrokerAdapter):
 
     def submit_bracket(self, req: OrderRequest, take_profit: float) -> BrokerResult:
         """Day-trade entry: a bracket (entry + take-profit limit + stop, one-cancels-the-other), time in force DAY,
-        so nothing carries overnight even if SwingDesk's 15:55 flatten were missed."""
+        so nothing carries overnight even if Tickmark's 15:55 flatten were missed."""
         body = {"symbol": req.symbol, "qty": str(req.qty), "side": "buy", "type": req.order_type, "time_in_force": "day",
                 "order_class": "bracket", "client_order_id": req.client_order_id,
                 "take_profit": {"limit_price": f"{take_profit:.2f}"}, "stop_loss": {"stop_price": f"{req.stop_price:.2f}"}}

@@ -72,7 +72,7 @@ async def lifespan(app):
     DAYMON.stop()
 
 
-app = FastAPI(title="SwingDesk API", lifespan=lifespan)
+app = FastAPI(title="Tickmark API", lifespan=lifespan)
 
 
 @app.middleware("http")
@@ -236,7 +236,7 @@ async def mcp_endpoint(request: Request):
     if not who:
         base = mcp_oauth.base_url(str(request.base_url))
         return JSONResponse(status_code=401, content={"error": "invalid or missing token"},
-                            headers={"WWW-Authenticate": f'Bearer realm="swingdesk", resource_metadata="{base}/.well-known/oauth-protected-resource"'})
+                            headers={"WWW-Authenticate": f'Bearer realm="tickmark", resource_metadata="{base}/.well-known/oauth-protected-resource"'})
     try:
         body = await request.json()
     except ValueError:
@@ -294,7 +294,7 @@ def oauth_authorize(request: Request):
     except mcp_oauth.OAuthError as exc:
         return HTMLResponse(f"<p>Can't connect: {exc.desc}</p>", status_code=400)
     user = _oauth_user(request)
-    if not user:          # sign in to SwingDesk first, then come back here
+    if not user:          # sign in to Tickmark first, then come back here
         from fastapi.responses import RedirectResponse
         return RedirectResponse("/?next=" + quote(str(request.url.path) + "?" + str(request.url.query), safe=""), status_code=302)
     rid = mcp_oauth.start_consent(user["id"], params)
@@ -308,7 +308,7 @@ async def oauth_decide(request: Request):
     form = {k: v[0] for k, v in parse_qs((await request.body()).decode()).items()}
     user = _oauth_user(request)
     if not user:
-        return HTMLResponse("<p>Sign in to SwingDesk first.</p>", status_code=401)
+        return HTMLResponse("<p>Sign in to Tickmark first.</p>", status_code=401)
     try:
         url = mcp_oauth.decide(form.get("request_id", ""), user["id"], form.get("decision") == "approve")
     except mcp_oauth.OAuthError as exc:
@@ -846,11 +846,11 @@ def oauth_callback(provider: str, code: str = "", state: str = "", error: str = 
     else:
         try:
             oauth.callback(provider, code, state)
-            msg, ok = f"Connected to {name}. You can close this tab and return to SwingDesk.", True
+            msg, ok = f"Connected to {name}. You can close this tab and return to Tickmark.", True
         except ValueError as exc:
             msg, ok = str(exc), False
     color = "#2fb37a" if ok else "#e0584f"
-    return HTMLResponse(f"<!doctype html><meta charset=utf-8><title>SwingDesk</title>"
+    return HTMLResponse(f"<!doctype html><meta charset=utf-8><title>Tickmark</title>"
                         f"<body style='font:16px system-ui;background:#0e1115;color:#e4e7eb;display:grid;place-items:center;height:100vh'>"
                         f"<p style='border:1px solid {color};padding:20px;border-radius:8px;max-width:480px'>{_h.escape(msg)}</p>",
                         status_code=200 if ok else 400)
@@ -958,7 +958,7 @@ def alerts_test(body: AlertTestIn):
     if body.channel not in alerts.CHANNELS:
         raise HTTPException(400, "channel must be desktop, slack or email")
     try:
-        alerts.send(body.channel, "Test alert", "If you can read this, SwingDesk alerts reach you here.")
+        alerts.send(body.channel, "Test alert", "If you can read this, Tickmark alerts reach you here.")
     except Exception as exc:
         raise HTTPException(502, f"{body.channel} test failed: {exc}")
     return {"ok": True}

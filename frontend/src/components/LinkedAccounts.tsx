@@ -48,7 +48,7 @@ export function LinkedAccounts({ notify }: { notify: (s: string) => void }) {
     setBusy("add");
     try {
       await api.post("/api/linked", { provider: prov, label, sandbox, values: vals });
-      notify("Linked. Keys are in the system keychain; SwingDesk only reads this account.");
+      notify("Linked. Keys are in the system keychain; Tickmark only reads this account.");
       setProv(""); setVals({}); setLabel(""); load();
     } catch (e) { notify((e as ApiError).message); } finally { setBusy(null); }
   }
@@ -60,7 +60,7 @@ export function LinkedAccounts({ notify }: { notify: (s: string) => void }) {
   return (
     <section className="linked">
       <h4>Linked accounts <span className="badge">read-only</span></h4>
-      <p className="small muted">Exchanges, brokers and wallets SwingDesk only reads (balances and positions), so the copilot and your
+      <p className="small muted">Exchanges, brokers and wallets Tickmark only reads (balances and positions), so the copilot and your
         review see everything in one place. Orders still go only through the trading broker above.</p>
       {d.accounts.length > 0 && <p className="small">Priced total: <b>{money(d.total_usd_valued)}</b></p>}
       {d.accounts.map((a) => (

@@ -13,7 +13,7 @@ from .trading import TradeError, run_live_refresh
 
 def main() -> int:
     if db.data_mode() != "live":
-        print("SwingDesk is in Demo data mode; switch to Live data in the app first.")
+        print("Tickmark is in Demo data mode; switch to Live data in the app first.")
         return 1
     ensure_db("live")
     try:

@@ -19,7 +19,7 @@ export function AccountPanel({ user, notify }: { user: PortalUser | null; notify
     try { const r = await api.post<{ token: string }>("/api/mcp/tokens", { name }); setFresh(r.token); load(); }
     catch (e) { notify((e as ApiError).message); }
   }
-  const cmd = fresh && toks ? `claude mcp add --transport http swingdesk ${toks.endpoint} --header "Authorization: Bearer ${fresh}"` : "";
+  const cmd = fresh && toks ? `claude mcp add --transport http tickmark ${toks.endpoint} --header "Authorization: Bearer ${fresh}"` : "";
   return (
     <div className="account">
       {user && (

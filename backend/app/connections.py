@@ -64,15 +64,15 @@ def overview() -> dict:
                       "how": b["how"], "paper": b["paper"], "state": state, "methods": methods,
                       "trading": b["status"] in ("available",) or bool(prov and linked.PROVIDERS[prov]["kind"] in linked.TRADING_KINDS)})
     st = copilot.status()
-    ai = [{"id": "copilot", "name": "SwingDesk Copilot", "group": "ai", "state": "connected" if st["ready"] else "available",
+    ai = [{"id": "copilot", "name": "Tickmark Copilot", "group": "ai", "state": "connected" if st["ready"] else "available",
            "segment": "Built-in assistant", "assets": st["model_label"], "how": "Pick a plan or model in the Copilot tab.",
            "methods": [*[{"kind": "plan", "label": p["name"], "available": p["enabled"], "connected": st["model"] == p["id"],
                           "detail": p["note"], "used": p["used"], "limit": p["limit"], "period": p["period"]} for p in st["plans"]],
                        {"kind": "api_key", "label": "Your Anthropic API key", "available": True, "connected": st["source"] == "keychain", "target": "anthropic"},
                        {"kind": "local", "label": "Your own local model (Ollama, LM Studio)", "available": True, "connected": st["model"] == "local"}]},
-          {"id": "connectors", "name": "Claude and other AI apps", "group": "ai", "state": "available", "segment": "Use SwingDesk inside your AI app",
-           "assets": "Your Claude (or other) plan pays for the AI; SwingDesk adds the tools",
-           "how": "In Claude, add a custom connector with this server's /mcp URL and sign in with your SwingDesk account; "
+          {"id": "connectors", "name": "Claude and other AI apps", "group": "ai", "state": "available", "segment": "Use Tickmark inside your AI app",
+           "assets": "Your Claude (or other) plan pays for the AI; Tickmark adds the tools",
+           "how": "In Claude, add a custom connector with this server's /mcp URL and sign in with your Tickmark account; "
                   "or create a personal token for Claude Code.",
            "methods": [{"kind": "connector", "label": "Add as a connector (sign in with OAuth)", "available": True, "connected": False},
                        {"kind": "token", "label": "Personal token (Claude Code, scripts)", "available": True, "connected": False}]}]

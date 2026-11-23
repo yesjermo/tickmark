@@ -14,7 +14,7 @@ interface Conn {
 const BREAK_LABEL: Record<string, string> = {
   untracked_position: "Position not in journal", missing_position: "Journal position missing at broker",
   qty_mismatch: "Quantity mismatch", unprotected_position: "No stop protecting position",
-  stale_local_order: "Order missing at broker", unknown_broker_order: "Broker order not from SwingDesk",
+  stale_local_order: "Order missing at broker", unknown_broker_order: "Broker order not from Tickmark",
   no_planned_exit: "No planned exit", orphan_order: "Order on a closed position",
 };
 
@@ -151,7 +151,7 @@ function IBKRPanel({ onChanged, notify, mode, dataMode }: { onChanged: () => voi
     <div className="ibkr">
       <ol className="small steps">
         <li>Download IBKR's <b>Client Portal Gateway</b>, unzip it and run <code>bin/run.sh root/conf.yaml</code>.</li>
-        <li>Open <code>https://localhost:5000</code> and log in with your <b>paper</b> username. IBKR handles the password and two-factor; SwingDesk never sees them.</li>
+        <li>Open <code>https://localhost:5000</code> and log in with your <b>paper</b> username. IBKR handles the password and two-factor; Tickmark never sees them.</li>
         <li>Click <b>Check connection</b> below and pick your paper account (IDs start with DU).</li>
       </ol>
       <label className="lbl">Gateway URL</label>
@@ -195,7 +195,7 @@ function OAuthList({ notify }: { notify: (s: string) => void }) {
   }
   return (
     <div className="oauthlist">
-      <p className="small muted">Sign-in brokers: click Connect, log in on the broker's own site, and SwingDesk keeps the session renewed. Order routing for these arrives with their adapters later in Phase 2.</p>
+      <p className="small muted">Sign-in brokers: click Connect, log in on the broker's own site, and Tickmark keeps the session renewed. Order routing for these arrives with their adapters later in Phase 2.</p>
       <ul>{list.map((p) => (
         <li key={p.id}>
           <div className="row between"><b>{p.name}</b>

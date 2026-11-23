@@ -26,7 +26,7 @@ function KeyForm({ target, providers, onDone, notify }: { target: string; provid
     try {
       if (alpaca) await api.post("/api/broker/connect", { key_id: vals.key_id, secret: vals.secret });
       else await api.post("/api/linked", { provider: target, sandbox, values: vals });
-      notify(alpaca ? "Alpaca paper connected." : `${p?.name} linked. SwingDesk reads it; trading real money needs its switch in Broker → Linked accounts.`);
+      notify(alpaca ? "Alpaca paper connected." : `${p?.name} linked. Tickmark reads it; trading real money needs its switch in Broker → Linked accounts.`);
       onDone();
     } catch (e) { notify((e as ApiError).message); } finally { setBusy(false); }
   }
@@ -77,7 +77,7 @@ export function Connections({ notify, goTab }: { notify: (s: string) => void; go
     <div className="connections">
       <header className="conn-head">
         <h2>Connections</h2>
-        <p className="muted small">Sign in to your brokers, exchanges and AI. Signing in or pasting a key only lets SwingDesk read the account;
+        <p className="muted small">Sign in to your brokers, exchanges and AI. Signing in or pasting a key only lets Tickmark read the account;
           real-money trading stays off until you turn on that account's switch.</p>
       </header>
       {d.groups.map((g) => {
@@ -129,7 +129,7 @@ export function Connections({ notify, goTab }: { notify: (s: string) => void; go
                               </li>
                             );
                           })}
-                          {it.methods.length === 0 && <li className="muted small">SwingDesk can't connect to {it.name}: it has no public API for this.</li>}
+                          {it.methods.length === 0 && <li className="muted small">Tickmark can't connect to {it.name}: it has no public API for this.</li>}
                         </ul>
                         {form && <KeyForm key={form} target={form} providers={providers} notify={notify} onDone={() => { setForm(null); load(); }} />}
                       </div>

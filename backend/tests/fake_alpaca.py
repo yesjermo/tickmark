@@ -1,4 +1,4 @@
-"""A stateful in-memory stand-in for the Alpaca Paper REST API (the endpoints SwingDesk uses).
+"""A stateful in-memory stand-in for the Alpaca Paper REST API (the endpoints Tickmark uses).
 
 Implements order placement with OTO stop legs and bracket (take-profit + stop, OCO) legs, client_order_id uniqueness, held
 quantity for open sells, cancels, nested order lookups, open-order listing,

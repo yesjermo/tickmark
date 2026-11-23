@@ -1,4 +1,4 @@
-"""SwingDesk as an MCP server (Model Context Protocol, Streamable HTTP transport, JSON responses).
+"""Tickmark as an MCP server (Model Context Protocol, Streamable HTTP transport, JSON responses).
 
 AI apps (Claude Code, Claude Desktop, other MCP clients) connect to POST /mcp with a personal access token
 (Authorization: Bearer sdk_...) made in the app. They get exactly the copilot's tools:
@@ -18,9 +18,9 @@ import json
 from . import copilot
 
 PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
-SERVER = {"name": "swingdesk", "title": "SwingDesk", "version": "1.0"}
-INSTRUCTIONS = ("SwingDesk is a swing- and day-trading research desk. Call get_overview first. Quote numbers only from tool "
-                "results. propose_* tools create proposals the user reviews in the SwingDesk app; you cannot place, cancel "
+SERVER = {"name": "tickmark", "title": "Tickmark", "version": "1.0"}
+INSTRUCTIONS = ("Tickmark is a swing- and day-trading research desk. Call get_overview first. Quote numbers only from tool "
+                "results. propose_* tools create proposals the user reviews in the Tickmark app; you cannot place, cancel "
                 "or close orders. This is decision support, not financial advice.")
 
 
@@ -56,7 +56,7 @@ def handle_one(msg: dict, token_id: str) -> dict | None:
         res, prop = copilot.run_tool(name, args, f"mcp:{token_id}")
         text = json.dumps(res, default=str)
         if prop:
-            text = json.dumps({**res, "next_step": "The user reviews this proposal in the SwingDesk app (Copilot tab)."}, default=str)
+            text = json.dumps({**res, "next_step": "The user reviews this proposal in the Tickmark app (Copilot tab)."}, default=str)
         return {"jsonrpc": "2.0", "id": id_, "result": {"content": [{"type": "text", "text": text[:60000]}], "isError": "error" in res}}
     return _err(id_, -32601, f"Method not found: {method}")
 

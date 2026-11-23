@@ -24,7 +24,7 @@ BROKERS = [
     {"id": "ibkr", "name": "Interactive Brokers", "segment": "Active traders and professionals", "connect": "gateway", "paper": True,
      "status": "available", "phase": 2, "assets": "Global stocks, options, futures, FX, bonds",
      "how": "Run IBKR's Client Portal Gateway, log in at https://localhost:5000 in your browser (IBKR handles the password and "
-            "two-factor), then pick your paper account (DU...) in SwingDesk. Paper accounts only in this build. "
+            "two-factor), then pick your paper account (DU...) in Tickmark. Paper accounts only in this build. "
             "A TWS / IB Gateway socket adapter (ports 7497 paper, 7496 live) is a later option."},
     {"id": "schwab", "name": "Charles Schwab", "segment": "Retail (largest US base, former TD Ameritrade)", "connect": "oauth2", "paper": False,
      "status": "planned", "phase": 2, "assets": "US stocks, ETFs, options",
@@ -46,7 +46,7 @@ BROKERS = [
             "available only where that broker allows it through SnapTrade. Fidelity and Vanguard are typically read-only."},
     {"id": "moomoo", "name": "moomoo / Futu", "segment": "Retail (US and Asia)", "connect": "gateway", "paper": True,
      "status": "linked", "phase": 2, "assets": "US and Hong Kong stocks, options", "linked_provider": "futu",
-     "how": "Run the OpenD gateway and log in there; SwingDesk connects to it locally (paper account by default). "
+     "how": "Run the OpenD gateway and log in there; Tickmark connects to it locally (paper account by default). "
             "Linked read-only today (balances and positions); order routing is next."},
     {"id": "robinhood", "name": "Robinhood", "segment": "Retail (largest app-first US base)", "connect": "api_key", "paper": False,
      "status": "linked", "phase": 2, "assets": "Crypto via the official API; stocks only through an aggregator", "linked_provider": "robinhood_crypto",
@@ -58,7 +58,7 @@ BROKERS = [
      "how": "Webull's OpenAPI needs an application approved by Webull (app key and secret). Until then, link it through SnapTrade."},
     {"id": "fidelity", "name": "Fidelity", "segment": "Retail and retirement (largest US asset base)", "connect": "aggregator", "paper": False,
      "status": "planned", "phase": 2, "assets": "US stocks, ETFs, funds",
-     "how": "Fidelity has no public trading API, so SwingDesk can't place Fidelity orders. Holdings could be linked read-only "
+     "how": "Fidelity has no public trading API, so Tickmark can't place Fidelity orders. Holdings could be linked read-only "
             "through SnapTrade or Plaid (planned); orders stay in Fidelity's own app."},
     {"id": "coinbase", "name": "Coinbase", "segment": "Crypto exchange (largest US)", "connect": "api_key", "paper": False,
      "status": "linked", "phase": 2, "assets": "Spot crypto", "linked_provider": "coinbase",
@@ -78,7 +78,7 @@ BROKERS = [
     {"id": "phantom", "name": "Phantom (Solana wallet)", "segment": "Self-custody crypto wallet", "connect": "address", "paper": False,
      "status": "linked", "phase": 2, "assets": "SOL and SPL tokens", "linked_provider": "phantom",
      "how": "Watch-only: paste the public address. A wallet has no broker API; trading would need the wallet to sign each "
-            "transaction, and SwingDesk never asks for a seed phrase or private key."},
+            "transaction, and Tickmark never asks for a seed phrase or private key."},
     {"id": "fix", "name": "Institutional FIX (prime and executing brokers)", "segment": "Hedge funds, asset managers, banks",
      "connect": "fix", "paper": True, "status": "planned", "phase": 3, "assets": "Multi-asset",
      "how": "A FIX 4.2/4.4 session (sender and target comp IDs, certification in the broker's UAT environment) through a "

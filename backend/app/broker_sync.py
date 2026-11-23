@@ -280,7 +280,7 @@ def reconcile(mode: str) -> dict:
         for sym in sorted(set(actual) | set(expected)):
             a, e = actual.get(sym, 0), expected.get(sym, 0)
             if a and not e:
-                breaks.append({"type": "untracked_position", "symbol": sym, "detail": f"broker holds {a}, journal expects none (trade made outside SwingDesk?)"})
+                breaks.append({"type": "untracked_position", "symbol": sym, "detail": f"broker holds {a}, journal expects none (trade made outside Tickmark?)"})
             elif e and not a:
                 breaks.append({"type": "missing_position", "symbol": sym, "detail": f"journal expects {e}, broker holds none"})
             elif a != e:
@@ -297,7 +297,7 @@ def reconcile(mode: str) -> dict:
             ids = {res.broker_order_id, *(l["id"] for l in res.legs)}
             if not ids & local_ids and not _read("SELECT id FROM orders WHERE broker_order_id=?", res.broker_order_id):
                 breaks.append({"type": "unknown_broker_order", "symbol": o["symbol"],
-                               "detail": f"open broker order {res.broker_order_id} was not placed by SwingDesk"})
+                               "detail": f"open broker order {res.broker_order_id} was not placed by Tickmark"})
         checked = len(set(actual) | set(expected))
     else:
         c = db.connect()

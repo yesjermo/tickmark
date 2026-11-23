@@ -19,6 +19,6 @@ if [ "${1:-}" = "dev" ]; then
   npm run dev
 else
   npm run build >/dev/null
-  echo "SwingDesk on http://localhost:8000  (paper trading, simulated data)"
+  echo "Tickmark on http://localhost:8000  (paper trading, simulated data)"
   cd "$ROOT/backend" && exec .venv/bin/uvicorn app.main:app --port 8000
 fi

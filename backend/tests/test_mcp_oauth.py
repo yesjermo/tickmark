@@ -52,7 +52,7 @@ def exchange(ai, cid, v, q, code):
 
 def test_full_flow_single_user(client):
     cid, v, q, page = connect(client, client)
-    assert page.status_code == 200 and "Connect Claude to SwingDesk?" in page.text and "can't</b> place" in page.text
+    assert page.status_code == 200 and "Connect Claude to Tickmark?" in page.text and "can't</b> place" in page.text
     code = approve(client, page)
     bad = client.post("/oauth/token", content=f"grant_type=authorization_code&code={code}&client_id={cid}&redirect_uri={q['redirect_uri']}&code_verifier=wrong",
                       headers={"content-type": "application/x-www-form-urlencoded"})
