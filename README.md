@@ -252,6 +252,14 @@ Anyone who wants more uses their own key and gets unlimited use.
 - **Switching models:** GPT, Gemini, open-source and local models share one conversation format, so you can switch between them mid-conversation; switching to or from Claude starts a new conversation.
 - **Testing so far:** tested against fake OpenAI and Gemini servers. Both real endpoints were confirmed reachable (they reject a missing or dummy key as expected), but no real GPT or Gemini call has been made, because that needs your key.
 
+**Why a free plan says "not offered here".** Someone has to pay for, or run, every free plan. A plan only appears once the server has what it needs: the operator's API key for that provider (free Claude, GPT or Gemini), or a reachable open-source model server (the open-source plan). Ways to offer free plans at no cost:
+- **On your own computer:** point the open-source plan at Ollama. Set `SWINGDESK_OSS_BASE_URL=http://localhost:11434/v1` and `SWINGDESK_OSS_MODEL=qwen3.5:9b`, and keep the Ollama app running. Checked 2026-11-23: Qwen 3.5 9B answered a question correctly through this plan, and the meter counted it.
+- **On a host without a GPU (such as Render's free plan):** the server can't run a model itself, but two free services work:
+  - **Google's Gemini API free tier:** a key from aistudio.google.com needs no billing. Set `GEMINI_API_KEY` and `SWINGDESK_FREE_TIER=on` to offer Free · Gemini. Google's free tier has rate limits, and Google may use free-tier prompts to improve its products.
+  - **A hosted open-model service with a free tier**, such as Groq: set `SWINGDESK_OSS_BASE_URL` (Groq: `https://api.groq.com/openai/v1`), `SWINGDESK_OSS_MODEL` (a model from that service's list) and `SWINGDESK_OSS_API_KEY`.
+
+  Add these in Render → tickmark → Environment, never in the repo.
+
 **Turning on the free GPT and Gemini plans (server operator):**
 1. Set `SWINGDESK_FREE_TIER=on`.
 2. Add `OPENAI_API_KEY` and/or `GEMINI_API_KEY` to the server's environment, preferably from a secret manager.
@@ -625,7 +633,7 @@ Status logic: all hard rules pass → **Qualifies** (with a warning if earnings 
 
 | Integration | Status |
 |---|---|
-| FastAPI + SQLite backend, all endpoints | **Exercised** by 304 pytest tests and in the browser |
+| FastAPI + SQLite backend, all endpoints | **Exercised** by 305 pytest tests and in the browser |
 | Day trades on Alpaca Paper (bracket, flatten, day monitor) | **Tested against the fake Alpaca server**: bracket body (DAY, take-profit, stop), stop and target leg rows, target fill, stop fill, the monitor's flatten at 15:55 (and that it sends only one sell), canceling an unfilled entry, the critical alert after the close, manual flatten through the broker, swing exits skipping day trades, replay staying on the simulator, and the real-money block. In the real app the monitor thread starts, and a replay ticket (SNDK, 2026-11-20 09:50) showed its route; no order was sent. **No bracket has been placed on the real Alpaca paper API yet.** That needs market hours and a qualifying signal. |
 | Daily auto-refresh scheduler | **Exercised** by tests with a fake clock: next-run times including weekends and Thanksgiving, retries, skipping in demo mode or when off, and a scheduled 16:20 run that fills a paper order and advances the forward test. In the real server, the thread starts and reports its next run as Mon 2026-11-23 16:20 ET. **A real 16:20 run hasn't happened yet.** |
 | One-shot refresh CLI + cron | **Exercised**: installed in the user's crontab. A one-time test entry fired at 01:06 PST under cron and fetched real Yahoo data into `data/refresh.log`, so cron can reach `~/Documents`. The test entry was then removed. |

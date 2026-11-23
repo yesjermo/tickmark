@@ -1,4 +1,5 @@
 """Copilot plans: free Claude allowance on the operator's key, free open-source model, own key unlimited."""
+import json
 import pytest
 from fastapi.testclient import TestClient
 
@@ -71,3 +72,19 @@ def test_free_allowance_is_per_portal_user(client, operator, monkeypatch):
         assert a.post("/api/copilot/chat", json={"text": "x", "model": "free"}).status_code == 200
     assert a.post("/api/copilot/chat", json={"text": "x", "model": "free"}).status_code == 429
     assert b.post("/api/copilot/chat", json={"text": "x", "model": "free"}).status_code == 200   # B has their own allowance
+
+
+def test_open_source_plan_can_use_a_hosted_service_with_a_key(confirmed, monkeypatch):
+    monkeypatch.setenv("SWINGDESK_OSS_BASE_URL", "https://api.groq.example/openai/v1")
+    monkeypatch.setenv("SWINGDESK_OSS_MODEL", "qwen/qwen3-32b")
+    monkeypatch.setenv("SWINGDESK_OSS_API_KEY", "gsk_test_123")
+    seen = {}
+
+    def handle(req):
+        seen["auth"] = req.headers.get("authorization")
+        seen["model"] = json.loads(req.content)["model"]
+        return httpx.Response(200, json=oa("Hosted open model answer."))
+    monkeypatch.setattr(copilot, "LOCAL_TRANSPORT", httpx.MockTransport(handle))
+    monkeypatch.setattr(copilot, "CLIENT_FACTORY", None)
+    r = confirmed.post("/api/copilot/chat", json={"text": "hi", "model": "oss"}).json()
+    assert r["reply"] == "Hosted open model answer." and seen == {"auth": "Bearer gsk_test_123", "model": "qwen/qwen3-32b"}

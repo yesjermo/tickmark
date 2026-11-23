@@ -22,5 +22,6 @@ services:
         value: "on"
       - key: SWINGDESK_FREE_TIER       # free copilot plans; only offered once you also add a provider key below
         value: "off"
-      # Optional, add in the dashboard (never commit them): ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY,
-      # SWINGDESK_OSS_BASE_URL, broker OAuth client ids (SCHWAB_CLIENT_ID, ALPACA_OAUTH_CLIENT_ID, ...).
+      # Optional, add in the dashboard (never commit them): ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
+      # (a free AI Studio key works), SWINGDESK_OSS_BASE_URL + SWINGDESK_OSS_MODEL + SWINGDESK_OSS_API_KEY (e.g. Groq),
+      # broker OAuth client ids (SCHWAB_CLIENT_ID, ALPACA_OAUTH_CLIENT_ID, ...).

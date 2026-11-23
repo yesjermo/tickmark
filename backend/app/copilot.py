@@ -710,7 +710,9 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
     if choice == "local":
         out = _local_loop(messages, thread_id, s)
     elif choice == "oss":
-        out = _local_loop(messages, thread_id, {"local_base_url": cfg["oss"]["base_url"], "local_model": cfg["oss"]["model"]})
+        # Ollama on this machine, or a hosted open-model service (Groq, OpenRouter, Together...) with SWINGDESK_OSS_API_KEY.
+        out = _local_loop(messages, thread_id, {"local_base_url": cfg["oss"]["base_url"], "local_model": cfg["oss"]["model"]},
+                          api_key=os.environ.get("SWINGDESK_OSS_API_KEY") or None)
     elif choice in CLOUD:
         out = _local_loop(messages, thread_id, {"local_base_url": CLOUD[choice]["base_url"], "local_model": s[f"{choice}_model"]},
                           api_key=_cloud_key(choice), provider=choice)
@@ -860,6 +862,8 @@ def _local_loop(messages: list, thread_id: str, s: dict, api_key: str | None = N
                 raise CopilotError(f"{who} rejected the API key. Replace it in the Copilot tab.", 401)
             if provider and r.status_code == 429:
                 raise CopilotError(f"{who} rate limit or quota reached; try again later or check your plan with {who}.", 429)
+            if not provider and r.status_code in (401, 403):
+                raise CopilotError("The open-source model service rejected the server's key (SWINGDESK_OSS_API_KEY).", 502)
             if r.status_code == 404:
                 if provider:
                     raise CopilotError(f"{who} doesn't offer '{s['local_model']}' to this key. Pick another model.", 502)

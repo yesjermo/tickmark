@@ -6,7 +6,8 @@
                                                               SWINGDESK_FREE_GPT_MODEL, optional)
   free_gemini  Google Gemini on the operator's Gemini key     (GEMINI_API_KEY or GOOGLE_API_KEY, SWINGDESK_FREE_GEMINI_MESSAGES=100,
                                                               SWINGDESK_FREE_GEMINI_MODEL, optional)
-  oss          an open-source model the operator hosts        (SWINGDESK_OSS_BASE_URL, SWINGDESK_OSS_MODEL, SWINGDESK_OSS_DAILY=300)
+  oss          an open-source model: Ollama on the server, or a hosted open-model service with a key
+               (SWINGDESK_OSS_BASE_URL, SWINGDESK_OSS_MODEL, optional SWINGDESK_OSS_API_KEY, SWINGDESK_OSS_DAILY=300)
 
 The three free plans are offered only when SWINGDESK_FREE_TIER=on and that provider's key is set. Without a pinned
 GPT/Gemini model, the newest flagship the operator's key can use is picked from the provider's model list (cached).
