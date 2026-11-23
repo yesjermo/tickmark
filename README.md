@@ -1,6 +1,6 @@
 # Tickmark
 
-**Project page:** https://yesjermo.github.io/tickmark-site/ (this repository, `tickmark`, is private; the page is published from the public `tickmark-site` repo).
+**Live app (invite-only):** https://tickmark-yqj2.onrender.com · **Project page:** https://yesjermo.github.io/tickmark-site/ (this repository, `tickmark`, is private; the page is published from the public `tickmark-site` repo).
 
 A working prototype of a broker-connected research and paper-trading assistant for a US equity swing trader, inspired by HKUST's InvestLM. It answers one question end to end:
 
@@ -354,6 +354,8 @@ In the portal, each user's tokens reach only that user's desk. Users also pick t
 **Checked:** against the real local server, with the **official MCP Python client (mcp 2.3.0)**: initialize (protocol 2025-06-18), tools/list (17 tools) and a tool call all worked. The test token was revoked afterwards.
 
 ## Hosting on Render (public, invite-only)
+
+Live since 2026-11-23 at **https://tickmark-yqj2.onrender.com** (blueprint `tickmark`, service on the free plan). From the internet: TLS is valid, `/healthz` answers, signed-out API calls get 401, and a sign-up without the setup code is refused.
 
 The repo includes a `Dockerfile` (it builds the web app, then serves the app and the API from one slim Python image) and a `render.yaml` blueprint:
 
