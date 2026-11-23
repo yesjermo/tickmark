@@ -191,3 +191,34 @@ def test_remember_me_sets_a_30_day_cookie(P):
     assert "max-age=2592000" in r.headers["set-cookie"].lower()
     r = b.post("/api/auth/login", json={"email": "owner@example.com", "password": "correct horse battery", "remember": False})
     assert "max-age" not in r.headers["set-cookie"].lower()
+
+
+def test_guest_cannot_start_outside_signins_or_reach_other_hosts(P):
+    a = P()
+    signup(a, "owner@example.com")
+    g = P()
+    g.post("/api/auth/guest")
+    for path in ("/api/oauth/alpaca/start", "/api/copilot/local-models?base_url=http://169.254.169.254/latest", "/api/admin/ai"):
+        r = g.get(path)
+        assert r.status_code == 403 and r.json().get("signup") is True, path
+    assert a.get("/api/copilot/local-models?base_url=http://169.254.169.254/latest").status_code == 409   # portal: no server-side "local" model
+
+
+def test_guest_creation_is_rate_limited(P, monkeypatch):
+    from app import portal
+    monkeypatch.setattr(portal, "_guest_hits", {})
+    monkeypatch.setattr(portal, "GUEST_RATE", (2, 3600.0))
+    signup(P(), "owner@example.com")
+    codes = [P().post("/api/auth/guest").status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
+
+
+def test_signup_still_signs_in_when_the_address_is_throttled(P, monkeypatch):
+    from app import portal
+    monkeypatch.setenv("SWINGDESK_OPEN_SIGNUP", "on")
+    signup(P(), "owner@example.com")
+    c = P()
+    for _ in range(6):
+        c.post("/api/auth/login", json={"email": "owner@example.com", "password": "wrong password!!"})
+    r = c.post("/api/auth/signup", json={"email": "new@example.com", "password": "correct horse battery"})
+    assert r.status_code == 200 and c.get("/api/auth/status").json()["user"]["email"] == "new@example.com"

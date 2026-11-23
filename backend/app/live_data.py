@@ -70,7 +70,8 @@ def fetch_bars(symbol: str, now: datetime | None = None) -> list[dict]:
     if not out:
         raise ValueError(f"no completed sessions for {symbol}")
     last = out[-1]
-    if last["close"] is None and last["date"] == cutoff:
+    newer = any(ts.date().isoformat() > cutoff for ts in df.index)     # a new session started: the quote is today's, not that day's
+    if last["close"] is None and last["date"] == cutoff and not newer:
         # Yahoo sometimes leaves the newest daily close blank (seen for SNDK on 2026-11-20) while its quote already has it.
         # Once the session is complete, the regular-market price is that session's close; label where it came from.
         try:
@@ -78,7 +79,8 @@ def fetch_bars(symbol: str, now: datetime | None = None) -> list[dict]:
             px = fi.get("lastPrice") if hasattr(fi, "get") else getattr(fi, "last_price", None)
         except Exception:
             px = None
-        if px and px == px and px > 0:
+        lo, hi = last["low"], last["high"]
+        if px and px == px and px > 0 and (lo is None or hi is None or lo - 1e-6 <= px <= hi + 1e-6):
             last["close"] = round(float(px), 4)
             last["source"] = f"{SOURCE} (close filled from the Yahoo quote; history had none)"
     return out

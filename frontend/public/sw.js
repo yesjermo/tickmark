@@ -26,7 +26,14 @@ self.addEventListener("fetch", (e) => {
   }
   if (url.pathname.startsWith("/assets/")) { // hashed build files never change: cache first
     e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request).then((r) => {
-      if (r.ok) { const copy = r.clone(); caches.open(SHELL).then((c) => c.put(e.request, copy)); }
+      if (r.ok) {
+        const copy = r.clone();
+        e.waitUntil(caches.open(SHELL).then(async (c) => {
+          await c.put(e.request, copy);
+          const old = (await c.keys()).filter((q) => new URL(q.url).pathname.startsWith("/assets/"));
+          await Promise.all(old.slice(0, Math.max(0, old.length - 12)).map((q) => c.delete(q)));   // keep the newest few
+        }));
+      }
       return r;
     })));
   }

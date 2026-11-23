@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, Evaluation, Order, Ruleset, Status_ } from "./api";
 import { TopBar } from "./components/TopBar";
 import { Watchlist } from "./components/Watchlist";
@@ -21,7 +21,8 @@ import { Connections } from "./components/Connections";
 import { CommandMenu, PaletteAction } from "./components/CommandMenu";
 import { Toaster, toast as sonner } from "sonner";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
-import { FocusStrip, useComfort } from "./components/Comfort";
+import { FocusStrip, useComfort, useSmoothScroll } from "./components/Comfort";
+import { useThemeKey } from "./components/theme";
 import { AccountCard } from "./components/AccountCard";
 import { Mark } from "./components/Mark";
 import { TVChart, TVTape } from "./components/TradingView";
@@ -41,12 +42,15 @@ export default function App() {
   const [auth, setAuth] = useState<{ portal: boolean; user: PortalUser | null; guest?: boolean; first_user?: boolean; open_signup?: boolean; setup_code_required?: boolean } | null>(null);
   const [authBox, setAuthBox] = useState<"in" | "up" | null>(null);
   // Like any website: visitors land on the desk as a guest (real prices, paper trades kept on this browser), and sign in when they want.
-  const load = () => api.get<any>("/api/auth/status").then(async (a) => {
-    if (a.portal && !a.user && !a.first_user && !new URLSearchParams(location.search).get("next")) {
+  const inflight = useRef<Promise<void> | null>(null);
+  const wasUser = useRef(false);
+  const load = () => inflight.current ?? (inflight.current = api.get<any>("/api/auth/status").then(async (a) => {
+    if (a.user && a.user.role !== "guest") wasUser.current = true;
+    if (a.portal && !a.user && !a.first_user && !wasUser.current && !new URLSearchParams(location.search).get("next")) {
       try { await api.post("/api/auth/guest"); a = await api.get<any>("/api/auth/status"); } catch { /* fall back to the sign-in page */ }
     }
     setAuth(a);
-  }).catch(() => setAuth({ portal: false, user: null }));
+  }).catch(() => setAuth({ portal: false, user: null })).finally(() => { inflight.current = null; }));
   useEffect(() => {
     load();
     const out = () => { load(); };
@@ -87,6 +91,8 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
   }, []);
   const [palette, setPalette] = useState(false);
   const comfort = useComfort();
+  const themeKey = useThemeKey();
+  const leftScroll = useSmoothScroll(comfort.smooth), centerScroll = useSmoothScroll(comfort.smooth), sideScroll = useSmoothScroll(comfort.smooth);
   const [chartSrc, setChartSrc] = useState<"rules" | "tv">(() => { try { return (localStorage.getItem("tickmark.chart") as "rules" | "tv") || "rules"; } catch { return "rules"; } });
   const pickChart = (c: "rules" | "tv") => { setChartSrc(c); try { localStorage.setItem("tickmark.chart", c); } catch { /* private mode */ } };
   const [tf, setTf] = useState<{ interval: Interval; range: Range }>(() => { try { return JSON.parse(localStorage.getItem("tickmark.tf") || "") } catch { return { interval: "D", range: "6M" }; } });
@@ -178,7 +184,7 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
     : { text: "Nothing qualifies right now. Check again after the close; no trade is a fine outcome." };
 
   return (
-    <MotionConfig reducedMotion={comfort.focus ? "always" : "user"}>
+    <MotionConfig reducedMotion={comfort.focus || comfort.motionLevel === "off" ? "always" : "user"}>
     <div className="app">
       <nav className="rail" aria-label="Sections">
         <div className="rail-mark"><Mark size={16} /></div>
@@ -203,15 +209,15 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
         openPalette={() => setPalette(true)} openConnections={() => setCenter("connections")} openBroker={() => setSide("broker")} />
       <CommandMenu open={palette} setOpen={setPalette} actions={actions} />
       <Toaster theme={comfort.theme} position="bottom-right" closeButton toastOptions={{ className: "sd-toast" }} />
-      {!comfort.focus && screen && screen.results.length > 0 && <TVTape symbols={screen.results.map((r) => r.symbol)} />}
+      {!comfort.focus && screen && screen.results.length > 0 && <TVTape key={themeKey} symbols={screen.results.map((r) => r.symbol)} />}
       {comfort.focus && <FocusStrip step={nextStep} onGo={"go" in nextStep ? nextStep.go : undefined} />}
       {screen && !screen.ruleset.version && !comfort.focus && (
         <div className="banner">
           Rules are an unconfirmed draft. Review the definitions in <b>Strategy</b> and save them as a version before placing paper trades.
         </div>
       )}
-      <div className="workspace" key={comfort.theme}>
-        <aside className="left">
+      <div className="workspace">
+        <aside className="left" ref={leftScroll}>
           {center !== "portfolio" && <AccountCard status={status} />}
           <Watchlist screen={screen} live={live} selected={selected} onChanged={refresh} notify={setToast}
             onSelect={(s) => { setSelected(s); setCenter("evidence"); }} />
@@ -242,25 +248,26 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
               )}
             </div>
             <div className="chart-body" style={chartSrc === "tv" ? { display: "none" } : undefined}>
-              <PriceChart symbol={ev?.symbol ?? selected} tick={tick} evaluation={ev} journal={journal} live={live}
+              <PriceChart key={themeKey} symbol={ev?.symbol ?? selected} tick={tick} evaluation={ev} journal={journal} live={live}
                 interval={["D", "W", "M"].includes(tf.interval) ? tf.interval : "D"} range={tf.range} />
+              {!ev && <div className="empty overlay">{screen?.needs_refresh ? "No live data yet. Click Refresh live data in the top bar." : "Loading…"}</div>}
             </div>
-            {chartSrc === "tv" && <div className="chart-body"><TVChart symbol={ev?.symbol ?? selected} interval={tf.interval} range={tf.range} /></div>}
-            {!ev && chartSrc === "rules" && <div className="empty overlay">{screen?.needs_refresh ? "No live data yet. Click Refresh live data in the top bar." : "Loading…"}</div>}
+            {chartSrc === "tv" && <div className="chart-body"><TVChart key={themeKey} symbol={ev?.symbol ?? selected} interval={tf.interval} range={tf.range} /></div>}
           </section>
           <div className="center-head">
             {(() => { const Icon = CICON[center]; return <h2><Icon size={16} aria-hidden /> {CENTER[center]}</h2>; })()}
           </div>
           <AnimatePresence mode="wait" initial={false}>
-            <motion.section key={center} className="center-body" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            <motion.section key={center} ref={centerScroll} className="center-body" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}>
               {center === "portfolio" && <Portfolio tick={tick} notify={setToast} />}
               {center === "evidence" && ev && <Evidence ev={ev} level={level} ruleset={screen!.ruleset} tick={tick} />}
               {center === "journal" && <Journal entries={journal} level={level} onChanged={refresh} tick={tick} />}
               {center === "forward" && <Forward tick={tick} level={level} live={live} />}
               {center === "documents" && <Documents symbol={selected} />}
-              {center === "connections" && <Connections notify={setToast} goTab={(t) => setSide(t as SideTab)} />}
-              {center === "day" && <DayTrading notify={setToast} onChanged={refresh} />}
+              {center === "connections" && <Connections notify={setToast} goTab={(t) => setSide(t as SideTab)}
+                openTicket={(sym) => { setSelected(sym); setCenter("evidence"); setSide("order"); }} />}
+              {center === "day" && <DayTrading key={themeKey} notify={setToast} onChanged={refresh} />}
               {center === "crypto" && <Crypto notify={setToast} prefill={cryptoPrefill} onPrefillUsed={() => setCryptoPrefill(null)} />}
             </motion.section>
           </AnimatePresence>
@@ -281,7 +288,7 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
             })}
           </nav>
           <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={side} className="side-body" initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }}
+            <motion.div key={side} ref={sideScroll} className="side-body" initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0 }} transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}>
             {side === "copilot" && (
               <Copilot level={level} notify={setToast} onChanged={refresh} openDay={() => setCenter("day")}

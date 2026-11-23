@@ -150,8 +150,25 @@ def real_user_count(c=None) -> int:
             c.close()
 
 
-def create_guest() -> tuple[str, dict]:
+_guest_hits: dict[str, list[float]] = {}
+GUEST_RATE = (5, 3600.0)          # new guest desks per address per hour
+_last_cleanup = [0.0]
+
+
+def create_guest(ip: str = "") -> tuple[str, dict]:
     """A browser's own view-only desk: real prices, paper trades saved, nothing that touches money or keys."""
+    import time
+    now = time.monotonic()
+    hits = [t for t in _guest_hits.get(ip, []) if now - t < GUEST_RATE[1]] + [now]
+    _guest_hits[ip] = hits
+    if len(hits) > GUEST_RATE[0]:
+        raise PortalError("Too many new guest desks from this network. Try again later, or create a free account.", 429)
+    if now - _last_cleanup[0] > 6 * 3600:
+        _last_cleanup[0] = now
+        try:
+            cleanup_guests()
+        except Exception:
+            pass
     c = conn()
     try:
         uid = "u_" + uuid.uuid4().hex[:16]
@@ -260,6 +277,18 @@ def login(email: str, password: str, ip: str = "", remember: bool = True) -> tup
         c.close()
 
 
+def issue_session(user_id: str, remember: bool = True) -> tuple[str, dict]:
+    """A session for a user who just proved who they are (sign-up), without another password check or throttle."""
+    c = conn()
+    try:
+        token = secrets.token_urlsafe(32)
+        exp = (datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS if remember else SHORT_SESSION_DAYS)).isoformat(timespec="seconds")
+        c.execute("INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)", (_h(token), user_id, _now(), exp))
+        return token, _public(c.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone())
+    finally:
+        c.close()
+
+
 def logout(token: str | None) -> None:
     if token:
         c = conn()
@@ -278,7 +307,11 @@ def user_for_session(token: str | None) -> dict | None:
                          WHERE s.token_hash=? AND u.disabled=0""", (_h(token),)).fetchone()
         if not r or r["expires_at"] < _now():
             return None
-        c.execute("UPDATE sessions SET last_seen=? WHERE token_hash=?", (_now(), _h(token)))
+        if r["role"] == "guest":      # an active guest keeps their desk: 30 days from the last visit, not from creation
+            exp = (datetime.now(timezone.utc) + timedelta(days=GUEST_DAYS)).isoformat(timespec="seconds")
+            c.execute("UPDATE sessions SET last_seen=?, expires_at=? WHERE token_hash=?", (_now(), exp, _h(token)))
+        else:
+            c.execute("UPDATE sessions SET last_seen=? WHERE token_hash=?", (_now(), _h(token)))
         return _public(r)
     finally:
         c.close()

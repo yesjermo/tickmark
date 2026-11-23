@@ -32,6 +32,7 @@ function EquityChart({ hist }: { hist: Hist[] }) {
   const L = 8, R = 64, T = 12, B = 26;
   const pts = hist.map((h) => ({ t: new Date(h.ts).getTime(), v: h.equity + h.linked_usd }));
   const { x, y, ticks, path, area } = useMemo(() => {
+    if (!pts.length) return { x: () => 0, y: () => 0, ticks: [] as number[], path: "", area: "" };
     const t0 = pts[0]?.t ?? 0, t1 = pts[pts.length - 1]?.t ?? 1;
     let lo = Math.min(...pts.map((p) => p.v)), hi = Math.max(...pts.map((p) => p.v));
     if (hi - lo < 1) { lo -= 50; hi += 50; }
@@ -45,6 +46,7 @@ function EquityChart({ hist }: { hist: Hist[] }) {
     return { x, y, ticks, path, area };
   }, [pts, w, H]);
   const hp = hover != null ? pts[hover] : null;
+  if (!pts.length) return <div className="eq-chart eq-empty" ref={box}><p className="small muted">No history yet.</p></div>;
   function move(e: React.PointerEvent<SVGSVGElement>) {
     const r = e.currentTarget.getBoundingClientRect();
     const mx = e.clientX - r.left;
@@ -73,7 +75,7 @@ function EquityChart({ hist }: { hist: Hist[] }) {
         </>}
       </svg>
       {hp && (
-        <div className="eq-tip" style={{ left: Math.min(Math.max(x(hp.t), 70), w - 140), top: y(hp.v) - 54 }}>
+        <div className="eq-tip" style={{ left: Math.min(Math.max(x(hp.t), 70), w - 140), top: y(hp.v) - 54 < 2 ? y(hp.v) + 12 : y(hp.v) - 54 }}>
           <b className="num">{usd(hp.v)}</b><span>{fmtT(hp.t)}</span>
         </div>
       )}
@@ -113,7 +115,7 @@ export function Portfolio({ tick, notify }: { tick: number; notify: (s: string) 
       </section>
 
       <div className="pf-grid">
-        <section className="pf-block">
+        <section className="pf-block" data-lenis-prevent>
           <h3>Allocation</h3>
           <ul className="alloc">
             {p.allocation.map((a, i) => (
@@ -126,7 +128,7 @@ export function Portfolio({ tick, notify }: { tick: number; notify: (s: string) 
             ))}
           </ul>
         </section>
-        <section className="pf-block pf-positions">
+        <section className="pf-block pf-positions" data-lenis-prevent>
           <h3>Positions</h3>
           {p.positions.length === 0 ? <p className="small muted">No open positions. Paper trades you place show up here with their cost and P&amp;L.</p> : (
             <table className="pf-table">

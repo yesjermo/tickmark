@@ -144,3 +144,20 @@ def test_server_that_rejects_tools_falls_back_to_snapshot(confirmed, monkeypatch
     monkeypatch.setattr(copilot, "CLIENT_FACTORY", None)
     r = confirmed.post("/api/copilot/chat", json={"text": "status?", "model": "oss"}).json()
     assert r["reply"].startswith("Answered from data.") and "Snapshot mode" in r["reply"]
+
+
+def test_free_quota_is_reserved_before_the_call_and_refunded_on_failure(confirmed, monkeypatch):
+    from app import copilot_plans
+    monkeypatch.setenv("SWINGDESK_OSS_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("SWINGDESK_OSS_DAILY", "1")
+
+    def boom(req):
+        raise httpx.ConnectError("down")
+    monkeypatch.setattr(copilot, "LOCAL_TRANSPORT", httpx.MockTransport(boom))
+    monkeypatch.setattr(copilot, "CLIENT_FACTORY", None)
+    assert confirmed.post("/api/copilot/chat", json={"text": "x", "model": "oss"}).status_code == 502
+    assert copilot_plans.used("oss") == 0                                      # refunded
+    monkeypatch.setattr(copilot, "LOCAL_TRANSPORT", httpx.MockTransport(lambda r: httpx.Response(200, json=oa("ok"))))
+    assert confirmed.post("/api/copilot/chat", json={"text": "x", "model": "oss"}).status_code == 200
+    assert copilot_plans.used("oss") == 1
+    assert confirmed.post("/api/copilot/chat", json={"text": "y", "model": "oss"}).status_code == 429   # limit 1 reached

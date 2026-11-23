@@ -286,6 +286,10 @@ def save_settings(model: str, local_base_url: str | None = None, local_model: st
 def local_models(base_url: str | None = None) -> dict:
     """Models the local OpenAI-compatible server (Ollama, LM Studio, llama.cpp, vLLM) reports."""
     import httpx
+    from . import portal
+    if portal.enabled():
+        raise CopilotError("On a shared server, \"your own local model\" would run on the server, not your computer. "
+                           "Use the open-source plan the server offers, or your own Claude, OpenAI or Gemini key.", 409)
     url = (base_url or settings()["local_base_url"]).rstrip("/")
     try:
         with httpx.Client(transport=LOCAL_TRANSPORT, timeout=5) as c:
@@ -700,8 +704,19 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
         raise CopilotError(f"Unknown model '{choice}'.")
     from . import copilot_plans
     cfg = copilot_plans.config()
+    reserved = False
     if choice in copilot_plans.PLANS:
-        copilot_plans.check(choice)
+        copilot_plans.check(choice)          # reserves one message atomically; refunded below if the call fails
+        reserved = True
+    try:
+        return _chat_run(text, thread_id, level, s, choice, cfg, copilot_plans)
+    except Exception:
+        if reserved:
+            copilot_plans.refund(choice)
+        raise
+
+
+def _chat_run(text, thread_id, level, s, choice, cfg, copilot_plans):
     if choice in CLOUD:
         if not _cloud_key(choice):
             raise CopilotError(f"Add your {CLOUD[choice]['name']} API key in the Copilot tab first.", 409)
@@ -722,6 +737,10 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
     stamp = intraday.now_et().strftime("%Y-%m-%d %H:%M ET")
     messages.append({"role": "user", "content": f"[{stamp} · reader level: {level}]\n{text}"})
     if choice == "local":
+        from . import portal
+        if portal.enabled():
+            raise CopilotError("Your own local model only works in the single-user app on your computer. "
+                               "Pick the open-source plan or add your own Claude, OpenAI or Gemini key.", 409)
         out = _local_loop(messages, thread_id, s)
     elif choice == "oss":
         # Ollama on this machine, or a hosted open-model service (Groq, OpenRouter, Together...) with SWINGDESK_OSS_API_KEY.
@@ -739,7 +758,7 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
     else:
         out = _claude_loop(messages, thread_id, choice)
     if choice in copilot_plans.PLANS:
-        copilot_plans.record(choice, out["usage"])
+        copilot_plans.record(choice, out["usage"])     # tokens only; the message was counted when it was reserved
     _save(thread_id, messages, text, model_id)
     return {"thread_id": thread_id, "model": model_id, **out}
 
@@ -850,7 +869,7 @@ def _snapshot(question: str, thread_id: str, steps: list) -> str:
     ov = grab("get_overview", {})
     grab("get_positions_and_orders", {})
     known = {str(r.get("symbol", "")).upper() for r in (ov.get("watchlist") or ov.get("screen") or []) if isinstance(r, dict)}
-    asked = [w for w in dict.fromkeys(re.findall(r"\b[A-Z]{1,5}\b", question.upper())) if w in known or (not known and len(w) >= 2)]
+    asked = [w for w in dict.fromkeys(re.findall(r"\b[A-Z]{1,5}\b", question.upper())) if w in known]
     for sym in asked[:3]:
         grab("get_symbol_evaluation", {"symbol": sym})
     return "DATA (fetched just now from the desk):\n" + "\n\n".join(parts)
@@ -943,7 +962,12 @@ def _local_loop(messages: list, thread_id: str, s: dict, api_key: str | None = N
                     raise CopilotError(f"{who} doesn't offer '{s['local_model']}' to this key. Pick another model.", 502)
                 raise CopilotError(f"The local server doesn't have '{s['local_model']}'. Pull it first (e.g. ollama pull {s['local_model']}).", 502)
             if r.status_code == 400 and not provider and "does not support tools" in r.text:
-                reply = _snapshot_call(http, url, headers, s, messages, thread_id, steps, usage, who)
+                try:
+                    reply = _snapshot_call(http, url, headers, s, messages, thread_id, steps, usage, who)
+                except httpx.ConnectError:
+                    raise CopilotError(f"No local model server at {s['local_base_url']}. Start Ollama (or LM Studio) and try again.", 502)
+                except httpx.TimeoutException:
+                    raise CopilotError(f"{who} took too long to answer.", 504)
                 break
             if r.status_code >= 400:
                 raise CopilotError(f"{who if provider else 'Local model server'} error {r.status_code}: {r.text[:200]}", 502)

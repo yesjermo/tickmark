@@ -16,15 +16,17 @@ This repository is private. Tickmark is decision-support software, not investmen
 | **Charts** | Tickmark's chart (completed bars, rule markers, planned stop) or TradingView's chart. Candle size 5m / 15m / 1h / 1D / 1W / 1M and range 1M–2Y; intraday candles use TradingView. A TradingView ticker tape of the watchlist with SPY and QQQ. |
 | **Rules and evidence** | Five swing strategies and two intraday ones on one engine; each rule shows its threshold, what was observed, and pass/fail, for beginners or analysts. |
 | **Workspaces** | Backtest (simulated), Live test (real prices, paper orders), Live trading (real money, per account). |
+| **TradingView** | Connect your own TradingView: alerts and strategy signals arrive through a private webhook, with an Open ticket button. They never place orders. |
 | **Connections** | Every broker, exchange and AI is a tile that opens its own connect window: sign in (OAuth, API keys, gateway), then switch real-money trading on in the same window. |
 | **Copilot** | Claude, GPT, Gemini or free open models (Gemma 4, Qwen 3.5, a small OpenAI gpt-oss). Researches strategies and drafts rules, orders and exits for you to approve. |
 | **Accounts** | Guests get a view-only desk on real prices with paper trading; sign-up keeps it. "Remember me" keeps a browser signed in for 30 days. Per-user encrypted keys; data backed up to a private GitHub repo. |
-| **Comfort** | Light warm-stone theme and a dark theme, focus (ADHD-friendly) mode with one next step and a 25-minute timer, generated background music, custom cursor. |
+| **Appearance** | System (default), Light or Dark, and color themes: Tickmark Stone plus IDE themes (GitHub, One Dark/Light, Dracula/Alucard, Nord, Solarized, Monokai), each in light and dark. |
+| **Motion and comfort** | Smooth (inertia) scrolling, cards that ease in as they scroll into view, motion Full / Subtle / Off, focus (ADHD-friendly) mode, generated background music, custom cursor. |
 | **Safety** | Paper first, a kill switch, stops at the broker, a typed phrase before any account trades real money and the ticker typed for every live order. |
 
 ## Contents
 
-[Quick start](#quick-start) · [Live mode](#live-mode) · [Copilot](#copilot-copilot-tab) · [Copilot plans](#copilot-plans-claude-gpt-and-gemini-free-with-sign-in-or-on-your-own-key) · [Connections](#connections-page-sign-in-to-brokers-exchanges-and-ai) · [Interface](#interface) · [Multi-user portal](#multi-user-portal-hosted) · [Hosting on Render](#hosting-on-render-public-open-sign-up) · [Brokers](#brokers-at-a-glance) · [Risk checks](#pre-trade-risk-checks) · [Day trading](#day-trading-day-trading-tab) · [Market data](#market-data-yahoo-free-or-alpaca-sip-licensed) · [Real money](#real-money-per-account-live-switch) · [What was tested](#what-was-exercised-and-what-was-only-checked-with-fixtures) · [Known limitations](#known-limitations)
+[Quick start](#quick-start) · [Live mode](#live-mode) · [Copilot](#copilot-copilot-tab) · [Copilot plans](#copilot-plans-claude-gpt-and-gemini-free-with-sign-in-or-on-your-own-key) · [Connections](#connections-page-sign-in-to-brokers-exchanges-and-ai) · [Interface](#interface) · [Multi-user portal](#multi-user-portal-hosted) · [Hosting on Render](#hosting-on-render-public-open-sign-up) · [Brokers](#brokers-at-a-glance) · [Risk checks](#pre-trade-risk-checks) · [Day trading](#day-trading-day-trading-tab) · [Market data](#market-data-yahoo-free-or-alpaca-sip-licensed) · [Real money](#real-money-per-account-live-switch) · [What was tested](#what-was-exercised-and-what-was-only-checked-with-fixtures) · [Audit fixes](#audit-fixes-2026-11-23) · [Known limitations](#known-limitations)
 
 ## How it started
 
@@ -331,7 +333,12 @@ Connected apps are listed in the Account tab, where you can disconnect them. The
    - **AI:** copilot plans, your own Claude/OpenAI/Gemini key, a local model, connectors and tokens for AI apps.
 2. **Trade real money**, in the same window once connected: for Alpaca, paste live keys, then type the confirmation phrase; for crypto exchanges, pick the non-testnet account, pass its checks and type the phrase. After that the account can trade live right away; every live order still asks for its ticker.
 
-Keys are stored encrypted for your account only and never sent back to the browser. Escape or a click outside closes the window.
+Keys are stored encrypted for your account only and never sent back to the browser. Escape or a click outside closes the window; focus moves into the window and returns when it closes.
+
+**TradingView** (first tile). TradingView has no sign-in API for other apps, so it connects the way trading apps do, with an alert webhook:
+1. **Create webhook URL** in the TradingView window. It's shown once; only its hash is stored. A new URL replaces the old one; Disconnect turns it off.
+2. In TradingView: **Alerts → Create alert → Notifications → Webhook URL**, paste it, and use the message template shown (`{"symbol": "{{ticker}}", "action": "buy", "price": {{close}}, ...}`). Plain text such as `BUY NVDA` works too. Webhooks need a paid TradingView plan.
+3. Each alert appears in the alerts bell and the window's **Signals** list with **Open ticket**. A signal never places an order. Limits: 8 KB per alert, 30 alerts a minute.
 
 ## Interface
 
@@ -351,6 +358,8 @@ Keys are stored encrypted for your account only and never sent back to the brows
 - **Installable app (PWA):** open the site in Chrome or Edge and click the install icon in the top bar (or the browser's install button). On iPhone/iPad use Share → Add to Home Screen; in Safari on a Mac, File → Add to Dock. It opens in its own window with the Tickmark icon. On phones the rail becomes a bottom tab bar and the blocks stack. The service worker caches only the app shell (page, scripts, styles, icons); market data, orders and accounts always come from the server and are never stored on the device.
 - **Portfolio (home):** total balance (trading account plus linked accounts' last snapshot), cash, buying power, unrealized and realized P&L, win rate, a graph of total value over time (sampled at most every 15 minutes while the desk is in use; nothing back-filled), allocation bars, and positions with average cost and P&L.
 - **Charts and TradingView:** a toolbar above the chart picks the source (**Rules**: Tickmark's chart with rule markers and the planned stop; **TradingView**: TradingView's chart and indicators), the candle size (5m, 15m, 1h, 1D, 1W, 1M) and the range (1M, 3M, 6M, 1Y, 2Y). Weekly and monthly candles are built from the daily bars; intraday candles switch to TradingView. A ticker tape of SPY, QQQ and the watchlist runs under the top bar (hidden in focus mode). These are TradingView's official free widgets: their US stock prices come from Cboe One, 15 minutes delayed, and are for viewing; the rules keep using completed daily bars. TradingView no longer serves index symbols such as `FOREXCOM:SPXUSD` to free widgets, so the tape uses the SPY and QQQ ETFs.
+- **Appearance:** the brain menu in the top bar. Light/dark mode is **System** by default (it follows the computer, and switches live when the computer does), or Light or Dark. Color themes: Tickmark Stone, GitHub, One Dark / One Light, Dracula / Alucard, Nord, Solarized and Monokai, each with a light and a dark version. The saved choice is applied before the page paints, and charts redraw in the new colors without resetting anything else on the desk.
+- **Motion and scrolling:** same menu. Motion Full / Subtle / Off; **Smooth scrolling** (Lenis inertia on mouse wheels and trackpads; phones keep native scrolling); **Scroll effects** (cards ease in as they scroll into view, using the browser's scroll-driven animations). All off in focus mode and with the system's reduced-motion setting.
 - **Installed app updates:** the service worker always loads the server's current page and keeps a copy only for offline use, so a new deploy never leaves an installed app on a stale page.
 - **Connections:** every broker, exchange and AI is a tile that opens its own connect window: its sign-in methods (OAuth, API keys, gateway), the key check, and then **Trade real money** in the same window. Real money still needs the account's confirmation phrase typed once, and every live order still asks for its ticker.
 - **AI strategy research:** top of the Strategy tab. Describe a goal; the copilot model reads the strategy library, your watchlist, indicators and the forward test, explains its choice and drafts a rule set. "Use these rules" saves it as a new version that screens the live watchlist. Checked 2026-11-23 with Gemma 4 E2B: it drafted an EMA-pullback rule set in about 90 seconds. Snapshot-mode models can't draft.
@@ -710,6 +719,18 @@ Status logic: all hard rules pass → **Qualifies** (with a warning if earnings 
 | Copilot (Claude tool loop, proposals) | **Tested with a scripted fake Claude client** (18 tests in all, including the model picker, the local loop against a fake OpenAI-compatible server, malformed tool arguments, and switching model families): request shape (model, adaptive thinking, caching, fallbacks), thinking blocks passed back unchanged, all tool results in one message, read tools on demo data, every proposal kind, apply and dismiss, refusing stale proposals, bad inputs returned as tool errors, refusals, the step limit, and keychain-only key storage. In the browser, the setup screen was checked against the real server, and the chat layout with stubbed replies. **Never run against the real Anthropic API**, because no key is set up yet. **The local-model path was run for real** with Ollama `qwen3.5:4b`, read-only questions only, through both the API and the UI. |
 | Claude explanation narrator | **Not exercised against the API.** The number guard is unit-tested. With the env var unset (the default), the deterministic templates are used. |
 | Document comparison | **Exercised** on the bundled fictional samples (tests and UI). It's a deterministic keyword-and-value extractor, not a language model. |
+
+## Audit fixes (2026-11-23)
+
+Two audits (backend and frontend) found these; each fix has a regression test where it can be tested.
+- **Backup:** a failed restore (GitHub outage, a different master key) no longer lets the next push overwrite the good backup; backup pauses without a fixed `SWINGDESK_MASTER_KEY`.
+- **Server-side requests:** in portal mode the copilot's "your own local model" is off (it would run on the server, so a user-supplied URL could reach internal hosts).
+- **Guests:** can't start broker or AI-app sign-ins (OAuth start, consent page, MCP), list server models or spend the server's AI key on explanations; guest creation is rate-limited per address; an active guest's desk is kept 30 days from the last visit; old guest desks are cleaned up while running.
+- **Free plans:** each message is reserved atomically before the model call and refunded if it fails, so parallel requests can't overrun the allowance.
+- **Sign-up** signs you in directly (a throttled address no longer leaves a created account and an error).
+- **Data:** the blank-close fill is used only for the just-finished session and only if the price fits that day's range; quotes fall back to Yahoo for any symbol Alpaca didn't return; "change" compares with the previous session once today's bar is in.
+- **Copilot snapshot mode:** connection errors come back as clear messages; no junk lookups when no market data is loaded.
+- **Frontend:** charts use the current theme's colors (including the IDE themes' `color-mix()` tokens); changing the theme no longer wipes a half-filled ticket; refreshes keep your chart zoom; the watchlist's hidden remove button can't be tapped by accident on phones (it shows beside the price and asks first); the connect window updates after real money is switched on and sends default field values; expired sessions show the sign-in page instead of a new guest desk; empty value history and the chart tooltip render correctly; the alerts drawer fits phones; the no-data overlay no longer covers the chart toolbar; popups manage keyboard focus; the focus timer asks for notification permission; the install button survives sign-in; the service worker prunes old files.
 
 ## Review fixes (2026-11-22)
 

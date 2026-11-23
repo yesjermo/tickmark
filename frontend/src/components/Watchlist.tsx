@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { api, ApiError } from "../api";
 import type { Screen } from "../App";
 import { StatusChip, num } from "./ui";
@@ -79,7 +80,8 @@ export function Watchlist({ screen, live, selected, onSelect, onChanged, notify 
               </button>
               {live && symbols.length > 1 && (
                 <button className="rm" title={`Remove ${r.symbol}`} aria-label={`Remove ${r.symbol}`} disabled={busy}
-                  onClick={() => save(symbols.filter((s) => s !== r.symbol))}>×</button>
+                  onClick={() => { if (window.confirm(`Remove ${r.symbol} from the watchlist?`)) save(symbols.filter((s) => s !== r.symbol)); }}>
+                  <X size={13} aria-hidden /></button>
               )}
             </li>
           );

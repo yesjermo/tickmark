@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { resolveColor } from "./theme";
 import { createChart, IChartApi, ISeriesApi, SeriesMarker, UTCTimestamp } from "lightweight-charts";
 import { api, ApiError } from "../api";
 import { ResultBadge, StatusChip, money } from "./ui";
@@ -17,7 +18,7 @@ interface Pos { id: string; symbol: string; status: string; broker: string; qty:
 
 // Bars are ET wall-clock strings; show them on the chart as-is by treating them as UTC.
 const ts = (s: string) => (Date.parse(s + ":00Z") / 1000) as UTCTimestamp;
-const css = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const css = (n: string) => resolveColor(n);    // handles color-mix() tokens from the IDE themes
 
 function lastSession(): string {
   // Local calendar date (toISOString would convert to UTC and can land on a weekend).

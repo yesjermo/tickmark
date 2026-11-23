@@ -209,10 +209,14 @@ def test_forward_frozen_evidence_survives_rule_change(live):
 
 
 def test_blank_newest_close_is_filled_from_the_quote(world):
-    """Yahoo left SNDK's 2026-11-20 close blank while its quote had 79.24: fill it, label the source."""
+    """Yahoo left SNDK's 2026-11-20 close blank while its quote had it: fill it, label the source; refuse a price outside the day's range."""
     world["nan_close"] = {"SNDK": ["2026-11-20"]}
-    world["quote"] = {"SNDK": 79.24}
-    bars = live_data.fetch_bars("SNDK")
-    assert bars[-1]["date"] == "2026-11-20" and bars[-1]["close"] == 79.24 and "filled from the Yahoo quote" in bars[-1]["source"]
     world["quote"] = {}
-    assert live_data.fetch_bars("SNDK")[-1]["close"] is None          # no quote: stays missing, never zero
+    blank = live_data.fetch_bars("SNDK")[-1]
+    assert blank["close"] is None                                     # no quote: stays missing, never zero
+    mid = round((blank["high"] + blank["low"]) / 2, 2)
+    world["quote"] = {"SNDK": mid}
+    bars = live_data.fetch_bars("SNDK")
+    assert bars[-1]["date"] == "2026-11-20" and bars[-1]["close"] == mid and "filled from the Yahoo quote" in bars[-1]["source"]
+    world["quote"] = {"SNDK": blank["high"] * 1.5}                    # e.g. the next session's live price: not that day's close
+    assert live_data.fetch_bars("SNDK")[-1]["close"] is None

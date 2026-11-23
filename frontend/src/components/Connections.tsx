@@ -3,14 +3,17 @@ import { AnimatePresence, motion } from "motion/react";
 import { Check, ChevronRight } from "lucide-react";
 import { api, ApiError } from "../api";
 import { ConnectPortal, Item, Monogram, Provider } from "./ConnectPortal";
+import { TradingViewConnect } from "./TradingViewConnect";
 
 const STATE: Record<string, string> = { connected: "Connected", available: "Connect", setup: "Needs server setup", planned: "Planned",
   unavailable: "No direct API" };
 
-export function Connections({ notify, goTab }: { notify: (s: string) => void; goTab: (side: string) => void }) {
+export function Connections({ notify, goTab, openTicket }: { notify: (s: string) => void; goTab: (side: string) => void; openTicket: (sym: string) => void }) {
   const [d, setD] = useState<{ groups: { id: string; name: string }[]; items: Item[] } | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  const [tv, setTv] = useState<{ connected: boolean; signals: unknown[] } | null>(null);
+  useEffect(() => { api.get<any>("/api/tradingview").then(setTv).catch(() => setTv(null)); }, [open]);
   const load = useCallback(() => api.get<any>("/api/connections").then(setD).catch((e) => notify((e as ApiError).message)), [notify]);
   useEffect(() => { load(); api.get<any>("/api/linked").then((r) => setProviders(r.providers)).catch(() => {}); }, [load]);
   const close = useCallback(() => setOpen(null), []);
@@ -24,6 +27,17 @@ export function Connections({ notify, goTab }: { notify: (s: string) => void; go
         <p className="muted small">Pick a broker, exchange or AI to connect. Each opens its own sign-in. Once an account is connected you can switch
           real-money trading on for it in the same window.</p>
       </header>
+      <section className="conn-group">
+        <h3>Charts and signals</h3>
+        <ul className="conn-tiles">
+          <li><button className={`conn-tile st-${tv?.connected ? "connected" : "available"}`} onClick={() => setOpen("tradingview")}>
+            <Monogram name="Trading View" />
+            <span className="grow"><b>TradingView</b><small>Alerts and strategy signals from your charts</small></span>
+            <span className={`conn-pill st-${tv?.connected ? "connected" : "available"}`}>{tv?.connected && <Check size={12} aria-hidden />}{tv?.connected ? "Connected" : "Connect"}</span>
+            <ChevronRight size={15} className="chev" aria-hidden />
+          </button></li>
+        </ul>
+      </section>
       {d.groups.map((g) => {
         const items = d.items.filter((i) => i.group === g.id);
         if (!items.length) return null;
@@ -47,6 +61,7 @@ export function Connections({ notify, goTab }: { notify: (s: string) => void; go
         );
       })}
       <AnimatePresence>
+        {open === "tradingview" && <TradingViewConnect key="tv" notify={notify} onClose={close} openTicket={openTicket} />}
         {item && <ConnectPortal key={item.id} item={item} providers={providers} notify={notify} onClose={close} onChanged={load} goTab={goTab} />}
       </AnimatePresence>
     </div>

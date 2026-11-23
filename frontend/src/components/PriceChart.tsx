@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createChart, IChartApi, ISeriesApi, SeriesMarker, Time } from "lightweight-charts";
 import { api, Evaluation } from "../api";
+import { resolveColor } from "./theme";
 
 interface Bar { time: string; open: number; high: number; low: number; close: number; volume: number }
 interface Overlay { name: string; values: { time: string; value: number }[] }
@@ -30,7 +31,7 @@ function rollup(bars: Bar[], interval: Interval): Bar[] {
 }
 
 function css(name: string) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return resolveColor(name);    // IDE themes use color-mix(), which the chart library can't parse on its own
 }
 
 export function PriceChart({ symbol, tick, evaluation, journal, live, interval = "D", range = "6M" }: {
@@ -38,6 +39,7 @@ export function PriceChart({ symbol, tick, evaluation, journal, live, interval =
   const el = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const series = useRef<{ c: ISeriesApi<"Candlestick">; lines: ISeriesApi<"Line">[]; v: ISeriesApi<"Histogram"> } | null>(null);
+  const fitKey = useRef("");
   const [meta, setMeta] = useState<{ names: string[]; strategy: string; source: string } | null>(null);
 
   useEffect(() => {
@@ -97,9 +99,12 @@ export function PriceChart({ symbol, tick, evaluation, journal, live, interval =
       const inRange = new Set(d.bars.map((b) => b.time));
       s.c.setMarkers(daily ? markers.filter((m) => inRange.has(m.time as string)).sort((a, b) => (a.time as string).localeCompare(b.time as string)) : []);
       // Fit after layout: a view zoomed for the previous candle size (or a size measured while hidden) must not carry over.
-      const ts = chart.current?.timeScale();
-      ts?.resetTimeScale();
-      requestAnimationFrame(() => { if (!cancelled) chart.current?.timeScale().fitContent(); });
+      const k = `${symbol}:${interval}:${range}`;
+      if (fitKey.current !== k) {      // a refresh keeps the user's zoom; a new symbol, candle size or range starts fitted
+        fitKey.current = k;
+        chart.current?.timeScale().resetTimeScale();
+        requestAnimationFrame(() => { if (!cancelled) chart.current?.timeScale().fitContent(); });
+      }
     }).catch(() => { /* chart fetch failed (e.g. no bars yet); leave the previous view */ });
     return () => { cancelled = true; };
   }, [symbol, tick, evaluation, journal, interval, range]);

@@ -1,5 +1,7 @@
 import { Mark } from "./Mark";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useDialog } from "./theme";
+const noop = () => {};
 import { motion } from "motion/react";
 import { X } from "lucide-react";
 import { api, ApiError } from "../api";
@@ -13,6 +15,8 @@ export function Login({ firstUser, openSignup, setupCode = false, onIn, start = 
   const [mode, setMode] = useState<"in" | "up">(firstUser ? "up" : start);
   const [f, setF] = useState({ email: "", password: "", name: "", invite: "" });
   const [remember, setRemember] = useState(true);
+  const box = useRef<HTMLDivElement>(null);
+  useDialog(box, onClose ?? noop, !!onClose);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function go() {
@@ -52,8 +56,8 @@ export function Login({ firstUser, openSignup, setupCode = false, onIn, start = 
   if (!onClose) return <div className="login-wrap">{form}</div>;
   return (
     <motion.div className="modal-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
-      <motion.div role="dialog" aria-modal="true" aria-label={mode === "in" ? "Sign in" : "Create account"} className="modal-wrap"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <motion.div ref={box} role="dialog" aria-modal="true" aria-label={mode === "in" ? "Sign in" : "Create account"} className="modal-wrap"
         initial={{ opacity: 0, y: 14, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.98 }}
         transition={{ type: "spring", stiffness: 420, damping: 34 }}>
         {form}

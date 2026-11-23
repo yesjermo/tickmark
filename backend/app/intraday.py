@@ -450,9 +450,11 @@ def latest_trades(symbols: list[str]) -> dict:
     try:
         with httpx.Client(base_url=DATA_URL, transport=TRANSPORT, timeout=10, headers={"APCA-API-KEY-ID": k, "APCA-API-SECRET-KEY": s}) as c:
             trades = c.get("/v2/stocks/trades/latest", params={"symbols": ",".join(symbols), "feed": "iex"}).json().get("trades", {})
-        return {sym: {"price": float(t["p"]), "t": t["t"], "feed": "iex"} for sym, t in trades.items() if t.get("p")}
+        out = {sym: {"price": float(t["p"]), "t": t["t"], "feed": "iex"} for sym, t in trades.items() if isinstance(t, dict) and t.get("p")}
     except Exception:
-        return {}
+        out = {}
+    missing = [s for s in symbols if s not in out]
+    return {**out, **(yahoo_quotes(missing) if missing else {})}
 
 
 YAHOO_QUOTES = None   # tests inject a fake

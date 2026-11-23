@@ -127,7 +127,7 @@ def check(plan: str) -> None:
         others = [PLANS[p]["name"] for p in ORDER if p != plan and cfg[p]["enabled"]]
         raise CopilotError(f"{name} isn't offered on this server." + (f" Try {', '.join(others)}," if others else "")
                            + " or add your own Claude, OpenAI or Gemini key.", 409)
-    if used(plan) >= cfg[plan]["limit"]:
+    if not _reserve(plan, cfg[plan]["limit"], cfg[plan]["period"]):
         when = "next month" if cfg[plan]["period"] == "month" else "tomorrow (UTC)"
         others = [PLANS[p]["name"] for p in ORDER if p != plan and cfg[p]["enabled"] and used(p) < cfg[p]["limit"]]
         raise CopilotError(f"You've used all {cfg[plan]['limit']} {name} messages this {cfg[plan]['period']}. It resets {when}. "
@@ -135,13 +135,39 @@ def check(plan: str) -> None:
                            + "your own key gives unlimited use.", 429)
 
 
-def record(plan: str, usage: dict) -> None:
+def _reserve(plan: str, limit: int, period: str) -> bool:
+    """Count one message now, only if it stays within the limit (one statement, so parallel requests can't overrun it)."""
+    c = portal.conn()
+    try:
+        _ensure(c)
+        key = (portal.CURRENT_USER.get(), plan, _period(period))
+        c.execute("INSERT OR IGNORE INTO usage(user_id,plan,period,messages) VALUES(?,?,?,0)", key)
+        return c.execute("UPDATE usage SET messages=messages+1 WHERE user_id=? AND plan=? AND period=? AND messages<?",
+                         (*key, limit)).rowcount == 1
+    finally:
+        c.close()
+
+
+def refund(plan: str) -> None:
+    """The model call failed: give the reserved message back."""
     cfg = config()[plan]
     c = portal.conn()
     try:
         _ensure(c)
-        c.execute("""INSERT INTO usage(user_id,plan,period,messages,input_tokens,output_tokens) VALUES(?,?,?,1,?,?)
-                     ON CONFLICT(user_id,plan,period) DO UPDATE SET messages=messages+1, input_tokens=input_tokens+excluded.input_tokens,
+        c.execute("UPDATE usage SET messages=MAX(messages-1,0) WHERE user_id=? AND plan=? AND period=?",
+                  (portal.CURRENT_USER.get(), plan, _period(cfg["period"])))
+    finally:
+        c.close()
+
+
+def record(plan: str, usage: dict) -> None:
+    """Add the tokens a reserved message used (the message itself was counted by check())."""
+    cfg = config()[plan]
+    c = portal.conn()
+    try:
+        _ensure(c)
+        c.execute("""INSERT INTO usage(user_id,plan,period,messages,input_tokens,output_tokens) VALUES(?,?,?,0,?,?)
+                     ON CONFLICT(user_id,plan,period) DO UPDATE SET input_tokens=input_tokens+excluded.input_tokens,
                      output_tokens=output_tokens+excluded.output_tokens""",
                   (portal.CURRENT_USER.get(), plan, _period(cfg["period"]), int(usage.get("input") or 0), int(usage.get("output") or 0)))
     finally:

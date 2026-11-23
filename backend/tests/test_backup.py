@@ -66,3 +66,37 @@ def test_backup_is_off_without_settings_and_no_backup_yet_is_fine(client, monkey
 def test_first_start_with_no_backup(client, gh):
     shutil.rmtree(db.DATA_DIR)
     assert backup.restore_if_empty() == "no backup yet"
+
+
+def test_failed_restore_pauses_pushes_so_the_good_backup_survives(tmp_path, monkeypatch):
+    import pytest
+    from app import backup, db
+    monkeypatch.setattr(db, "DATA_DIR", tmp_path)
+    monkeypatch.setenv("SWINGDESK_BACKUP_REPO", "me/data")
+    monkeypatch.setenv("SWINGDESK_BACKUP_TOKEN", "t")
+    monkeypatch.setenv("SWINGDESK_MASTER_KEY", "k" * 40)
+    monkeypatch.setattr(backup, "BLOCKED", None)
+    puts = []
+
+    def handle(req):
+        if req.method == "PUT":
+            puts.append(1)
+            return httpx.Response(201, json={})
+        return httpx.Response(502, text="bad gateway")
+    monkeypatch.setattr(backup, "TRANSPORT", httpx.MockTransport(handle))
+    with pytest.raises(RuntimeError):
+        backup.restore_if_empty()
+    b = backup.Backup()
+    (tmp_path / "x.db").write_bytes(b"")
+    b.maybe_push(force=True)
+    assert puts == [] and "restore failed" in b.state["paused"]
+
+
+def test_backup_pauses_without_a_fixed_master_key(tmp_path, monkeypatch):
+    from app import backup, db
+    monkeypatch.setattr(db, "DATA_DIR", tmp_path)
+    monkeypatch.setenv("SWINGDESK_BACKUP_REPO", "me/data")
+    monkeypatch.setenv("SWINGDESK_BACKUP_TOKEN", "t")
+    monkeypatch.delenv("SWINGDESK_MASTER_KEY", raising=False)
+    monkeypatch.setattr(backup, "BLOCKED", None)
+    assert backup.restore_if_empty().startswith("backup paused")

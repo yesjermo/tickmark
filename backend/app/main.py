@@ -100,11 +100,13 @@ async def deliver_alerts(request: Request, call_next):
 
 
 PUBLIC_API = ("/api/auth/",)
+# Any method: these start outside sign-ins or make the server reach other hosts.
+GUEST_BLOCKED_ANY = ("/api/oauth", "/api/admin", "/api/copilot/local-models", "/api/mcp")
 # Guests (no account yet) get a view-only desk: real prices, indicators and paper trades on the local simulator. Anything
 # that touches money, keys, outside accounts, AI usage or the server's settings needs an account.
 GUEST_BLOCKED = ("/api/admin", "/api/alerts/secrets", "/api/alerts/settings", "/api/alerts/test", "/api/broker", "/api/copilot",
                  "/api/crypto", "/api/linked", "/api/live-gate", "/api/mcp", "/api/oauth", "/api/portal", "/api/data/provider",
-                 "/api/documents/compare", "/api/strategy/research")
+                 "/api/documents/compare", "/api/strategy/research", "/api/tradingview")
 
 
 @app.middleware("http")
@@ -118,7 +120,7 @@ async def portal_auth(request: Request, call_next):
         return JSONResponse(status_code=401, content={"detail": "Sign in first.", "signin": True}, headers={"Cache-Control": "no-store"})
     if request.method in ("POST", "PUT", "DELETE", "PATCH") and request.headers.get("x-swingdesk") != "1":
         return JSONResponse(status_code=403, content={"detail": "Missing X-SwingDesk header (cross-site request refused)."})
-    if user["role"] == "guest" and request.method in ("POST", "PUT", "DELETE", "PATCH") and path.startswith(GUEST_BLOCKED):
+    if user["role"] == "guest" and (path.startswith(GUEST_BLOCKED_ANY) or (request.method in ("POST", "PUT", "DELETE", "PATCH") and path.startswith(GUEST_BLOCKED))):
         return JSONResponse(status_code=403, content={"detail": "Create a free account to connect brokers, exchanges and AI, or to trade real money. "
                                                       "Guests can watch live prices and paper-trade.", "signup": True})
     request.state.user = user
@@ -218,7 +220,7 @@ def auth_signup(body: SignupIn, request: Request):
     u = portal.signup(body.email, body.password, body.name, body.invite, guest_id=guest_id)
     if not guest_id:
         _start_live(u["id"])
-    token, u = portal.login(body.email, body.password, request.client.host if request.client else "", remember=body.remember)
+    token, u = portal.issue_session(u["id"], remember=body.remember)    # no second password check that could throttle a fresh account
     from . import backup
     backup.BACKUP.request()                     # save the new account off-site right away
     return _cookie(JSONResponse({"user": u, "kept_guest_desk": bool(guest_id)}), request, token, body.remember)
@@ -242,7 +244,7 @@ def auth_guest(request: Request):
     current = portal.user_for_session(request.cookies.get(portal.SESSION_COOKIE))
     if current:
         return {"user": current}
-    token, u = portal.create_guest()
+    token, u = portal.create_guest(request.client.host if request.client else "")
     _start_live(u["id"])
     return _cookie(JSONResponse({"user": u}), request, token, True)
 
@@ -424,7 +426,8 @@ async def oauth_register(request: Request):
 def _oauth_user(request: Request) -> dict | None:
     if not portal.enabled():
         return {"id": portal.LOCAL_USER, "email": "this computer"}
-    return portal.user_for_session(request.cookies.get(portal.SESSION_COOKIE))
+    u = portal.user_for_session(request.cookies.get(portal.SESSION_COOKIE))
+    return None if u and u["role"] == "guest" else u      # connecting an AI app needs a real account
 
 
 @app.get("/oauth/authorize")
@@ -596,7 +599,12 @@ def quotes():
         if db.data_mode() != "live":
             return {"quotes": {}, "note": "Backtest uses simulated prices; switch to Live test for real quotes."}
         syms = db.kv_get(c, "watchlist", [])
-        closes = {s: trading._last_close(c, s) for s in syms}
+        from . import live_data
+        today = live_data.now_et().date().isoformat()
+        closes = {}
+        for s in syms:         # once today's completed bar is stored, "change" is against the session before it
+            rows = c.execute("SELECT date, close FROM bars WHERE symbol=? AND close IS NOT NULL ORDER BY date DESC LIMIT 2", (s,)).fetchall()
+            closes[s] = (rows[1]["close"] if rows and rows[0]["date"] >= today and len(rows) > 1 else rows[0]["close"] if rows else None)
     finally:
         c.close()
     q = intraday.latest_trades(syms)
@@ -623,7 +631,7 @@ def chart(symbol: str, sessions: int = 90):
 
 
 @app.get("/api/symbols/{symbol}/explain")
-def explain_symbol(symbol: str, level: str = "beginner"):
+def explain_symbol(symbol: str, request: Request, level: str = "beginner"):
     if level not in ("beginner", "analyst"):
         raise HTTPException(400, "level must be beginner or analyst")
     c = conn()
@@ -631,7 +639,8 @@ def explain_symbol(symbol: str, level: str = "beginner"):
         p, _ = trading.current_params(c)
         ev = trading.evaluate_symbol(c, symbol.upper(), p)
         from dataclasses import asdict
-        return {"explanation": explain.explain(ev, asdict(p), level), "evaluation": ev}
+        guest = (getattr(request.state, "user", None) or {}).get("role") == "guest"
+        return {"explanation": explain.explain(ev, asdict(p), level, allow_llm=not guest), "evaluation": ev}
     finally:
         c.close()
 
@@ -1282,6 +1291,39 @@ def crypto_journal():
         return pnl_mod.crypto_journal(c)
     finally:
         c.close()
+
+
+@app.get("/api/tradingview")
+def tv_status():
+    from . import tradingview
+    return tradingview.status()
+
+
+@app.post("/api/tradingview/token")
+def tv_token(request: Request):
+    """A new private webhook URL for TradingView alerts (shown once; replaces the old one)."""
+    from . import tradingview
+    token = tradingview.create_token()
+    base = (os.environ.get("RENDER_EXTERNAL_URL") or str(request.base_url)).rstrip("/")
+    return {"url": f"{base}/hooks/tradingview/{token}", "template": tradingview.TEMPLATE}
+
+
+@app.delete("/api/tradingview")
+def tv_disconnect():
+    from . import tradingview
+    tradingview.disconnect()
+    return {"connected": False}
+
+
+@app.post("/hooks/tradingview/{token}")
+async def tv_hook(token: str, request: Request):
+    """TradingView alert webhook. The token in the URL is the secret; the alert only records a signal, never an order."""
+    from . import tradingview
+    raw = await request.body()
+    try:
+        return await run_in_threadpool(tradingview.receive, token, raw)
+    except tradingview.HookError as exc:
+        return JSONResponse(status_code=exc.code, content={"detail": str(exc)})
 
 
 @app.get("/api/portfolio")

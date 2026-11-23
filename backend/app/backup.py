@@ -109,10 +109,26 @@ def _is_empty() -> bool:
     return not any(p.suffix == ".db" for p in _files())
 
 
+BLOCKED: str | None = None     # set when pushing could overwrite a good backup with an empty or unreadable one
+
+
 def restore_if_empty() -> str:
-    """Bring back the latest snapshot onto a fresh disk. Never overwrites existing data."""
+    """Bring back the latest snapshot onto a fresh disk. Never overwrites existing data.
+    If the restore fails (GitHub outage, a different master key), pushes stay off until the next start, so the good copy survives."""
+    global BLOCKED
     if not enabled():
         return "backup off"
+    if not os.environ.get("SWINGDESK_MASTER_KEY"):
+        BLOCKED = "SWINGDESK_MASTER_KEY is not set: a generated key isn't in the backup, so it could never be read back"
+        return f"backup paused: {BLOCKED}"
+    try:
+        return _restore()
+    except Exception as exc:
+        BLOCKED = f"restore failed ({type(exc).__name__}: {exc})"[:200]
+        raise
+
+
+def _restore() -> str:
     if not _is_empty():
         return "data present; nothing restored"
     repo = os.environ["SWINGDESK_BACKUP_REPO"]
@@ -155,6 +171,9 @@ class Backup:
         self.soon.set()
 
     def maybe_push(self, force: bool = False):
+        if BLOCKED:
+            self.state = {"enabled": True, "paused": BLOCKED}
+            return
         fp = fingerprint()
         if fp == self.last_fp and not force:
             return

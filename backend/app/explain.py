@@ -101,7 +101,7 @@ def _beginner_line(r: dict, ev: dict) -> str:
     return r["name"]
 
 
-def explain(ev: dict, params: dict, level: str) -> dict:
+def explain(ev: dict, params: dict, level: str, allow_llm: bool = True) -> dict:
     ev = {**ev, "params": params}
     title, summary = STATUS_WORDS[ev["status"]]
     f = ev["facts"]
@@ -124,7 +124,7 @@ def explain(ev: dict, params: dict, level: str) -> dict:
                       "rule": "data", "result": "info", "facts": ["bar"]})
     out = {"level": level, "status": ev["status"], "title": title, "summary": summary, "lines": lines,
            "narrator": "deterministic templates", "llm_note": None}
-    if os.environ.get("SWINGDESK_LLM") == "claude":
+    if allow_llm and os.environ.get("SWINGDESK_LLM") == "claude":     # guests never spend the server's AI key
         out = _try_claude(out, ev, level)
     return out
 

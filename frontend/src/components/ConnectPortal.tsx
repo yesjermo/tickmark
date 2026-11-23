@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialog } from "./theme";
 import { motion } from "motion/react";
 import { Bot, Check, ExternalLink, KeyRound, LogIn, Server, ShieldAlert, Wallet, X } from "lucide-react";
 import { api, ApiError } from "../api";
@@ -22,7 +23,8 @@ function KeyForm({ target, providers, onDone, notify }: { target: string; provid
   const alpaca = target === "alpaca_paper" || target === "alpaca_live";
   const fields: Field[] = alpaca ? [{ key: "key_id", label: "API key ID", secret: false, default: null, placeholder: target === "alpaca_live" ? "AK…" : "PK…" },
     { key: "secret", label: "Secret key", secret: true, default: null, placeholder: null }] : p?.fields ?? [];
-  const [vals, setVals] = useState<Record<string, string>>({});
+  const [vals, setVals] = useState<Record<string, string>>(() =>
+    Object.fromEntries(fields.filter((f) => f.default != null).map((f) => [f.key, f.default as string])));
   const [sandbox, setSandbox] = useState(!!p?.sandbox);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -63,10 +65,11 @@ function GoLive({ item, notify, onChanged }: { item: Item; notify: (s: string) =
   const [st, setSt] = useState<any>(null);
   const [phrase, setPhrase] = useState("");
   const [busy, setBusy] = useState(false);
+  const [rev, setRev] = useState(0);
   useEffect(() => {
     if (alpaca && liveKeys) api.get<any>("/api/live-gate").then(setSt).catch(() => {});
     else if (acct) api.get<any>(`/api/linked/${acct}/live`).then(setSt).catch(() => {});
-  }, [alpaca, liveKeys, acct]);
+  }, [alpaca, liveKeys, acct, rev]);
   if (alpaca && !liveKeys) return <KeyForm target="alpaca_live" providers={[]} notify={notify} onDone={onChanged} />;
   if (!alpaca && !realAccounts.length) return <p className="small muted">Real-money trading needs a non-testnet account connected here first.</p>;
   if (!st) return <p className="small muted">Checking the account…</p>;
@@ -79,7 +82,7 @@ function GoLive({ item, notify, onChanged }: { item: Item; notify: (s: string) =
       if (alpaca) await api.post("/api/live-gate/enable", { phrase, broker: "alpaca" });
       else await api.put(`/api/linked/${acct}/live`, { on: true, phrase });
       notify(`Real-money trading is on for ${item.name}. Every order still asks you to type its ticker.`);
-      onChanged();
+      setPhrase(""); setRev((r) => r + 1); onChanged();
     } catch (e) { notify((e as ApiError).message); } finally { setBusy(false); }
   }
   if (on) return <p className="portal-ok"><Check size={14} aria-hidden /> Real-money trading is on. Switch back to paper any time in the Broker tab.</p>;
@@ -104,11 +107,8 @@ export function ConnectPortal({ item, providers, notify, onClose, onChanged, goT
   const [form, setForm] = useState<string | null>(null);
   const connected = item.state === "connected";
   const canLive = item.id === "alpaca" || (!!item.trading && item.methods.some((m) => m.accounts?.length));
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", esc);
-    return () => document.removeEventListener("keydown", esc);
-  }, [onClose]);
+  const box = useRef<HTMLElement>(null);
+  useDialog(box, onClose);
 
   async function pick(m: Method) {
     if (m.kind === "oauth") {
@@ -126,7 +126,7 @@ export function ConnectPortal({ item, providers, notify, onClose, onChanged, goT
   return (
     <motion.div className="modal-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <motion.section role="dialog" aria-modal="true" aria-label={`Connect ${item.name}`} className="portal card"
+      <motion.section ref={box} role="dialog" aria-modal="true" aria-label={`Connect ${item.name}`} className="portal card"
         initial={{ opacity: 0, y: 16, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.98 }}
         transition={{ type: "spring", stiffness: 420, damping: 34 }}>
         <header className="portal-head">
