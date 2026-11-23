@@ -8,7 +8,7 @@ import { TradingViewConnect } from "./TradingViewConnect";
 const STATE: Record<string, string> = { connected: "Connected", available: "Connect", setup: "Needs server setup", planned: "Planned",
   unavailable: "No direct API" };
 
-export function Connections({ notify, goTab, openTicket }: { notify: (s: string) => void; goTab: (side: string) => void; openTicket: (sym: string) => void }) {
+export function Connections({ notify, goTab, openTicket, symbol }: { notify: (s: string) => void; goTab: (side: string) => void; openTicket: (sym: string) => void; symbol?: string }) {
   const [d, setD] = useState<{ groups: { id: string; name: string }[]; items: Item[] } | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [open, setOpen] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export function Connections({ notify, goTab, openTicket }: { notify: (s: string)
         <ul className="conn-tiles">
           <li><button className={`conn-tile st-${tv?.connected ? "connected" : "available"}`} onClick={() => setOpen("tradingview")}>
             <Monogram name="Trading View" />
-            <span className="grow"><b>TradingView</b><small>Alerts and strategy signals from your charts</small></span>
+            <span className="grow"><b>TradingView</b><small>Sign in, open your own charts, receive your alerts</small></span>
             <span className={`conn-pill st-${tv?.connected ? "connected" : "available"}`}>{tv?.connected && <Check size={12} aria-hidden />}{tv?.connected ? "Connected" : "Connect"}</span>
             <ChevronRight size={15} className="chev" aria-hidden />
           </button></li>
@@ -61,7 +61,7 @@ export function Connections({ notify, goTab, openTicket }: { notify: (s: string)
         );
       })}
       <AnimatePresence>
-        {open === "tradingview" && <TradingViewConnect key="tv" notify={notify} onClose={close} openTicket={openTicket} />}
+        {open === "tradingview" && <TradingViewConnect key="tv" notify={notify} onClose={close} openTicket={openTicket} symbol={symbol} />}
         {item && <ConnectPortal key={item.id} item={item} providers={providers} notify={notify} onClose={close} onChanged={load} goTab={goTab} />}
       </AnimatePresence>
     </div>

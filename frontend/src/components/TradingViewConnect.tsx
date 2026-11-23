@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDialog } from "./theme";
 import { motion } from "motion/react";
-import { Check, Copy, RefreshCw, X } from "lucide-react";
+import { Check, Copy, ExternalLink, LogIn, RefreshCw, X } from "lucide-react";
+import { openMyTradingView, openTradingViewSignIn } from "./TradingView";
 import { api, ApiError } from "../api";
 import { Monogram } from "./ConnectPortal";
 
 interface Sig { id: number; at: string; symbol: string; action: string; price: number | null; interval: string | null; note: string | null }
 
 /** Connect TradingView: a private alert webhook. Signals arrive as alerts and here; they never place orders. */
-export function TradingViewConnect({ notify, onClose, openTicket }: { notify: (s: string) => void; onClose: () => void; openTicket: (sym: string) => void }) {
-  const [st, setSt] = useState<{ connected: boolean; created_at: string | null; signals: Sig[]; template: string } | null>(null);
+export function TradingViewConnect({ notify, onClose, openTicket, symbol = "NVDA" }: { notify: (s: string) => void; onClose: () => void; openTicket: (sym: string) => void; symbol?: string }) {
+  const [st, setSt] = useState<{ connected: boolean; created_at: string | null; signals: Sig[]; template: string; layout_url: string | null } | null>(null);
+  const [layout, setLayout] = useState("");
   const [url, setUrl] = useState<string | null>(null);
   const load = useCallback(() => api.get<any>("/api/tradingview").then(setSt).catch((e) => notify((e as ApiError).message)), [notify]);
   useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, [load]);
@@ -18,6 +20,13 @@ export function TradingViewConnect({ notify, onClose, openTicket }: { notify: (s
   async function make() {
     try { const r = await api.post<{ url: string }>("/api/tradingview/token"); setUrl(r.url); load(); }
     catch (e) { notify((e as ApiError).message); }
+  }
+  async function saveLayout() {
+    try {
+      const r = await api.put<{ layout_url: string | null }>("/api/tradingview/layout", { url: layout });
+      setLayout(""); load(); window.dispatchEvent(new Event("tickmark:tv-layout"));
+      notify(r.layout_url ? "Your TradingView layout is saved. \"Open in my TradingView\" uses it." : "Layout link removed.");
+    } catch (e) { notify((e as ApiError).message); }
   }
   async function off() {
     try { await api.del("/api/tradingview"); setUrl(null); load(); notify("TradingView disconnected; the old webhook URL no longer works."); }
@@ -35,8 +44,27 @@ export function TradingViewConnect({ notify, onClose, openTicket }: { notify: (s
           <div className="grow"><h2>TradingView</h2><p className="small muted">Alerts from your own charts and strategies</p></div>
           <button className="iconbtn" onClick={onClose} aria-label="Close"><X size={16} aria-hidden /></button>
         </header>
-        <p className="small">TradingView doesn't let other apps sign in to your account, so you connect it the way trading apps do: an alert webhook.
-          Your alerts and strategy signals arrive here and in the alerts bell. They never place an order; you review and trade from the ticket.</p>
+        <ol className="portal-steps">
+          <li className="now">
+            <h3>Your TradingView account</h3>
+            <p className="small muted">Sign in on TradingView's own page; it opens in a window next to the desk. Tickmark never sees your password.
+              Once you're signed in there, "Open my chart" shows your own TradingView (saved layouts, indicators, drawings) on the symbol you're looking at.</p>
+            <div className="row">
+              <button className="btn primary" onClick={openTradingViewSignIn}><LogIn size={14} aria-hidden /> Sign in to TradingView</button>
+              <button className="btn" onClick={() => openMyTradingView(symbol, "D", st?.layout_url)}><ExternalLink size={14} aria-hidden /> Open my chart ({symbol})</button>
+            </div>
+            <label className="tv-layout">Your chart layout (optional): in TradingView, open the layout you use and copy its link
+              <span className="copyrow">
+                <input placeholder={st?.layout_url ?? "https://www.tradingview.com/chart/AbCd1234/"} value={layout} onChange={(e) => setLayout(e.target.value)} spellCheck={false} />
+                <button className="btn small" onClick={saveLayout} disabled={!layout.trim()}>Save</button>
+                {st?.layout_url && !layout && <button className="btn small ghost" onClick={() => { setLayout(""); api.put("/api/tradingview/layout", { url: "" }).then(() => { load(); window.dispatchEvent(new Event("tickmark:tv-layout")); }); }}>Forget</button>}
+              </span>
+            </label>
+            {st?.layout_url && <p className="small muted"><Check size={12} aria-hidden /> Using your layout {st.layout_url.replace("https://www.tradingview.com", "")}</p>}
+          </li>
+        </ol>
+        <p className="small">Signals from your alerts: TradingView sends them through a private webhook. They arrive here and in the alerts bell
+          and never place an order; you review and trade from the ticket.</p>
         <ol className="portal-steps">
           <li className={st?.connected ? "done" : "now"}>
             <h3>{st?.connected ? <><Check size={14} aria-hidden /> Webhook ready</> : "1. Create your private webhook URL"}</h3>

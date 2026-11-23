@@ -25,9 +25,9 @@ import { FocusStrip, useComfort, useSmoothScroll } from "./components/Comfort";
 import { useThemeKey } from "./components/theme";
 import { AccountCard } from "./components/AccountCard";
 import { Mark } from "./components/Mark";
-import { TVChart, TVTape } from "./components/TradingView";
+import { TVChart, TVTape, openMyTradingView } from "./components/TradingView";
 import { Portfolio } from "./components/Portfolio";
-import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart } from "lucide-react";
+import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart, ExternalLink } from "lucide-react";
 
 export type Level = "beginner" | "analyst";
 type CenterTab = "portfolio" | "evidence" | "journal" | "forward" | "documents" | "day" | "crypto" | "connections";
@@ -91,6 +91,12 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
   }, []);
   const [palette, setPalette] = useState(false);
   const comfort = useComfort();
+  const [tvLayout, setTvLayout] = useState<string | null>(null);
+  useEffect(() => {
+    const get = () => api.get<{ layout_url: string | null }>("/api/tradingview").then((r) => setTvLayout(r.layout_url)).catch(() => {});
+    get(); window.addEventListener("tickmark:tv-layout", get);
+    return () => window.removeEventListener("tickmark:tv-layout", get);
+  }, []);
   const themeKey = useThemeKey();
   const leftScroll = useSmoothScroll(comfort.smooth), centerScroll = useSmoothScroll(comfort.smooth), sideScroll = useSmoothScroll(comfort.smooth);
   const [chartSrc, setChartSrc] = useState<"rules" | "tv">(() => { try { return (localStorage.getItem("tickmark.chart") as "rules" | "tv") || "rules"; } catch { return "rules"; } });
@@ -239,6 +245,9 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
                     {({ "5": "5m", "15": "15m", "60": "1h", D: "1D", W: "1W", M: "1M" } as Record<string, string>)[i]}</button>
                 ))}
               </div>
+              <button className="btn small ghost tv-open" onClick={() => openMyTradingView(ev?.symbol ?? selected, tf.interval, tvLayout)}
+                title="Your own TradingView (sign in there once): saved layouts, indicators and drawings, in a window beside the desk">
+                <ExternalLink size={13} aria-hidden /> My TradingView</button>
               {["D", "W", "M"].includes(tf.interval) && (
                 <div className="seg" role="group" aria-label="Time range">
                   {(["1M", "3M", "6M", "1Y", "2Y"] as Range[]).map((r) => (
@@ -266,7 +275,7 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
               {center === "forward" && <Forward tick={tick} level={level} live={live} />}
               {center === "documents" && <Documents symbol={selected} />}
               {center === "connections" && <Connections notify={setToast} goTab={(t) => setSide(t as SideTab)}
-                openTicket={(sym) => { setSelected(sym); setCenter("evidence"); setSide("order"); }} />}
+                openTicket={(sym) => { setSelected(sym); setCenter("evidence"); setSide("order"); }} symbol={ev?.symbol ?? selected} />}
               {center === "day" && <DayTrading key={themeKey} notify={setToast} onChanged={refresh} />}
               {center === "crypto" && <Crypto notify={setToast} prefill={cryptoPrefill} onPrefillUsed={() => setCryptoPrefill(null)} />}
             </motion.section>

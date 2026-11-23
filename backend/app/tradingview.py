@@ -48,6 +48,26 @@ def _pconn():
     return c
 
 
+LAYOUT = re.compile(r"^https://(?:www\.)?tradingview\.com/chart/([A-Za-z0-9]{6,16})/?(?:[?#].*)?$")
+
+
+def layout_url() -> str | None:
+    return db.get_setting("tradingview_layout")
+
+
+def save_layout(url: str | None) -> str | None:
+    """The user's own TradingView chart layout (a tradingview.com/chart/<id>/ link). Only the canonical link is kept."""
+    if not url or not url.strip():
+        db.set_setting("tradingview_layout", None)
+        return None
+    m = LAYOUT.match(url.strip())
+    if not m:
+        raise HookError("Paste a TradingView chart link, like https://www.tradingview.com/chart/AbCd1234/", 422)
+    canon = f"https://www.tradingview.com/chart/{m.group(1)}/"
+    db.set_setting("tradingview_layout", canon)
+    return canon
+
+
 def status() -> dict:
     uid = portal.CURRENT_USER.get()
     c = _pconn()
@@ -58,7 +78,8 @@ def status() -> dict:
     with db.tx() as t:
         t.execute(SCHEMA)
         sig = [dict(x) for x in t.execute("SELECT id, at, symbol, action, price, interval, note FROM tv_signals ORDER BY id DESC LIMIT 50")]
-    return {"connected": bool(r), "created_at": r["created_at"] if r else None, "signals": sig, "template": TEMPLATE}
+    return {"connected": bool(r), "created_at": r["created_at"] if r else None, "signals": sig, "template": TEMPLATE,
+            "layout_url": layout_url()}
 
 
 def create_token() -> str:

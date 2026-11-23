@@ -32,3 +32,13 @@ def test_tradingview_rate_limit(client, monkeypatch):
     token = client.post("/api/tradingview/token").json()["url"].rsplit("/", 1)[-1]
     codes = [client.post(f"/hooks/tradingview/{token}", content=b'{"symbol": "NVDA"}').status_code for _ in range(3)]
     assert codes == [200, 200, 429]
+
+
+def test_tradingview_layout_link_is_validated_and_saved(client):
+    assert client.get("/api/tradingview").json()["layout_url"] is None
+    r = client.put("/api/tradingview/layout", json={"url": "https://tradingview.com/chart/AbCd1234/?symbol=NASDAQ%3ANVDA"})
+    assert r.json()["layout_url"] == "https://www.tradingview.com/chart/AbCd1234/"
+    assert client.get("/api/tradingview").json()["layout_url"] == "https://www.tradingview.com/chart/AbCd1234/"
+    for bad in ("https://evil.example/chart/AbCd1234/", "javascript:alert(1)", "https://www.tradingview.com/accounts/signin/"):
+        assert client.put("/api/tradingview/layout", json={"url": bad}).status_code == 422, bad
+    assert client.put("/api/tradingview/layout", json={"url": ""}).json()["layout_url"] is None

@@ -1014,3 +1014,5 @@ button, a, select, label, [role=button] { touch-action: manipulation; -webkit-ta
   .rail-btn { flex: 1 0 40px; min-width: 40px; padding: 4px 2px; }
   .rail-label { font-size: 9.5px; }
 }
+.tv-layout { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+.chart-bar .tv-open { margin-left: auto; order: 9; }

@@ -56,3 +56,20 @@ export const TVTape = memo(function TVTape({ symbols }: { symbols: string[] }) {
   }, [key, t]);
   return <div className="tradingview-widget-container tv-tape" ref={box} aria-label="Live prices from TradingView" />;
 });
+
+/** Your own TradingView, in one reusable window beside the desk. TradingView has no sign-in for other apps, so you sign in on
+ *  TradingView's own page; after that this window shows your saved layouts, indicators and drawings. */
+const TV_WINDOW = "tickmark-tradingview";
+const winFeatures = () => {
+  const w = Math.min(1360, screen.availWidth - 40), h = Math.min(900, screen.availHeight - 40);
+  return `popup,width=${w},height=${h},left=${Math.max(0, screen.availWidth - w)},top=20`;
+};
+export function openTradingViewSignIn() {
+  window.open("https://www.tradingview.com/accounts/signin/", TV_WINDOW, winFeatures())?.focus();
+}
+const TV_INTERVAL: Record<string, string> = { "5": "5", "15": "15", "60": "60", D: "D", W: "W", M: "M" };
+export function openMyTradingView(symbol: string, interval = "D", layoutUrl?: string | null) {
+  const base = layoutUrl && /^https:\/\/www\.tradingview\.com\/chart\/[A-Za-z0-9]+\/$/.test(layoutUrl) ? layoutUrl : "https://www.tradingview.com/chart/";
+  const url = `${base}?symbol=${encodeURIComponent(symbol)}&interval=${TV_INTERVAL[interval] ?? "D"}`;
+  window.open(url, TV_WINDOW, winFeatures())?.focus();
+}

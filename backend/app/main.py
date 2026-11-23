@@ -1308,6 +1308,19 @@ def tv_token(request: Request):
     return {"url": f"{base}/hooks/tradingview/{token}", "template": tradingview.TEMPLATE}
 
 
+class TVLayoutIn(BaseModel):
+    url: str | None = None
+
+
+@app.put("/api/tradingview/layout")
+def tv_layout(body: TVLayoutIn):
+    from . import tradingview
+    try:
+        return {"layout_url": tradingview.save_layout(body.url)}
+    except tradingview.HookError as exc:
+        raise HTTPException(exc.code, str(exc))
+
+
 @app.delete("/api/tradingview")
 def tv_disconnect():
     from . import tradingview

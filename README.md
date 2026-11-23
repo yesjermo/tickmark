@@ -16,7 +16,7 @@ This repository is private. Tickmark is decision-support software, not investmen
 | **Charts** | Tickmark's chart (completed bars, rule markers, planned stop) or TradingView's chart. Candle size 5m / 15m / 1h / 1D / 1W / 1M and range 1M–2Y; intraday candles use TradingView. A TradingView ticker tape of the watchlist with SPY and QQQ. |
 | **Rules and evidence** | Five swing strategies and two intraday ones on one engine; each rule shows its threshold, what was observed, and pass/fail, for beginners or analysts. |
 | **Workspaces** | Backtest (simulated), Live test (real prices, paper orders), Live trading (real money, per account). |
-| **TradingView** | Connect your own TradingView: alerts and strategy signals arrive through a private webhook, with an Open ticket button. They never place orders. |
+| **TradingView** | Sign in to your own TradingView on TradingView's page, open your saved layouts on the symbol you're viewing ("My TradingView" on the chart), and receive your alerts through a private webhook. Signals never place orders. |
 | **Connections** | Every broker, exchange and AI is a tile that opens its own connect window: sign in (OAuth, API keys, gateway), then switch real-money trading on in the same window. |
 | **Copilot** | Claude, GPT, Gemini or free open models (Gemma 4, Qwen 3.5, a small OpenAI gpt-oss). Researches strategies and drafts rules, orders and exits for you to approve. |
 | **Accounts** | Guests get a view-only desk on real prices with paper trading; sign-up keeps it. "Remember me" keeps a browser signed in for 30 days. Per-user encrypted keys; data backed up to a private GitHub repo. |
@@ -335,7 +335,10 @@ Connected apps are listed in the Account tab, where you can disconnect them. The
 
 Keys are stored encrypted for your account only and never sent back to the browser. Escape or a click outside closes the window; focus moves into the window and returns when it closes.
 
-**TradingView** (first tile). TradingView has no sign-in API for other apps, so it connects the way trading apps do, with an alert webhook:
+**TradingView** (first tile). TradingView has no sign-in API (OAuth) for other apps and doesn't allow its site inside other pages, and Tickmark won't ask for your TradingView password or session cookie. So:
+- **Sign in to TradingView** opens TradingView's own sign-in page in a window beside the desk; you sign in there (Tickmark never sees the password).
+- **Open my chart** (and **My TradingView** in the chart toolbar) opens your own TradingView in that same window on the symbol and candle size you're viewing, with your indicators and drawings. Paste a chart layout link (`https://www.tradingview.com/chart/<id>/`) to always open that layout; it's saved with your account.
+- **Signals** come in through an alert webhook:
 1. **Create webhook URL** in the TradingView window. It's shown once; only its hash is stored. A new URL replaces the old one; Disconnect turns it off.
 2. In TradingView: **Alerts → Create alert → Notifications → Webhook URL**, paste it, and use the message template shown (`{"symbol": "{{ticker}}", "action": "buy", "price": {{close}}, ...}`). Plain text such as `BUY NVDA` works too. Webhooks need a paid TradingView plan.
 3. Each alert appears in the alerts bell and the window's **Signals** list with **Open ticket**. A signal never places an order. Limits: 8 KB per alert, 30 alerts a minute.
