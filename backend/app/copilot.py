@@ -28,7 +28,7 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
 
-from . import credentials, db
+from . import credentials, db, server_settings
 
 MODEL = "claude-opus-5-5"     # default
 EFFORT = os.environ.get("SWINGDESK_COPILOT_EFFORT", "medium")
@@ -254,12 +254,17 @@ def _is_loopback(url: str) -> bool:
 
 
 def save_settings(model: str, local_base_url: str | None = None, local_model: str | None = None,
-                  openai_model: str | None = None, gemini_model: str | None = None) -> dict:
+                  openai_model: str | None = None, gemini_model: str | None = None, oss_model: str | None = None) -> dict:
     from urllib.parse import urlparse
     if model not in PLAN_CHOICES and model not in CLAUDE_MODELS:
         raise CopilotError(f"Unknown model '{model}'.")
     s = settings()
     s["model"] = model
+    if oss_model is not None:
+        from . import copilot_plans
+        if oss_model not in copilot_plans.config()["oss"]["models"]:
+            raise CopilotError(f"'{oss_model}' isn't one of the open models this server offers.")
+        s["oss_model"] = oss_model
     for prov, val in (("openai", openai_model), ("gemini", gemini_model)):
         if val is not None:
             if not val.strip() or len(val) > 80:
@@ -293,6 +298,13 @@ def local_models(base_url: str | None = None) -> dict:
                 "error": f"{type(exc).__name__}: {exc}"[:200]}
 
 
+def _oss_label(s: dict) -> str:
+    from . import copilot_plans
+    models = copilot_plans.config()["oss"]["models"]
+    chosen = s.get("oss_model") if s.get("oss_model") in models else copilot_plans.config()["oss"]["model"]
+    return copilot_plans.open_model_label(chosen)
+
+
 def status() -> dict:
     src = key_source()
     k = credentials.get_secret(KEY_NAME)
@@ -304,6 +316,7 @@ def status() -> dict:
     cloud = {p: {"name": v["name"], "configured": bool(_cloud_key(p)), "key_hint": credentials.hint(_cloud_key(p)),
                  "model": s.get(f"{p}_model"), "billed": v["billed"], "keys_at": v["keys_at"]} for p, v in CLOUD.items()}
     label = (CLAUDE_MODELS[s["model"]]["name"] + " · your key" if s["model"] in CLAUDE_MODELS else
+             f"{pl['oss']['name']} ({_oss_label(s)})" if s["model"] == "oss" else
              f"{pl[s['model']]['name']} ({pl[s['model']]['model']})" if s["model"] in pl else
              f"{CLOUD[s['model']]['name']}: {s.get(s['model'] + '_model') or 'pick a model'} · your key" if s["model"] in CLOUD else
              f"Local: {s['local_model']}")
@@ -694,7 +707,8 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
             raise CopilotError(f"Add your {CLOUD[choice]['name']} API key in the Copilot tab first.", 409)
         if not s.get(f"{choice}_model"):
             raise CopilotError(f"Pick a {CLOUD[choice]['name']} model in the Copilot tab.", 409)
-    model_id = {"local": f"local:{s['local_model']}", "oss": f"oss:{cfg['oss']['model']}",
+    oss_model = s.get("oss_model") if s.get("oss_model") in cfg["oss"]["models"] else cfg["oss"]["model"]
+    model_id = {"local": f"local:{s['local_model']}", "oss": f"oss:{oss_model}",
                 "free": f"free:{cfg['free']['model']}", "openai": f"openai:{s.get('openai_model')}",
                 **{p: f"{p}:{copilot_plans.model_for(p)}" for p in FREE_CLOUD if p == choice},
                 "gemini": f"gemini:{s.get('gemini_model')}"}.get(choice, choice)
@@ -711,8 +725,8 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
         out = _local_loop(messages, thread_id, s)
     elif choice == "oss":
         # Ollama on this machine, or a hosted open-model service (Groq, OpenRouter, Together...) with SWINGDESK_OSS_API_KEY.
-        out = _local_loop(messages, thread_id, {"local_base_url": cfg["oss"]["base_url"], "local_model": cfg["oss"]["model"]},
-                          api_key=os.environ.get("SWINGDESK_OSS_API_KEY") or None)
+        out = _local_loop(messages, thread_id, {"local_base_url": cfg["oss"]["base_url"], "local_model": oss_model},
+                          api_key=server_settings.get("SWINGDESK_OSS_API_KEY") or None)
     elif choice in CLOUD:
         out = _local_loop(messages, thread_id, {"local_base_url": CLOUD[choice]["base_url"], "local_model": s[f"{choice}_model"]},
                           api_key=_cloud_key(choice), provider=choice)
@@ -750,7 +764,8 @@ def operator_client():
     if CLIENT_FACTORY:
         return CLIENT_FACTORY()
     import anthropic
-    return anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    from . import copilot_plans
+    return anthropic.Anthropic(api_key=copilot_plans.operator_key("free"))
 
 
 def _claude_loop(messages: list, thread_id: str, model: str, operator: bool = False) -> dict:

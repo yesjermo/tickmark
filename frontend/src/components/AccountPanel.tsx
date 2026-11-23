@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { PortalUser } from "./Login";
+import { AdminAI } from "./AdminAI";
 
 interface Tok { id: string; name: string; prefix: string; created_at: string; last_used_at: string | null; revoked_at: string | null }
 
@@ -53,6 +54,7 @@ export function AccountPanel({ user, notify }: { user: PortalUser | null; notify
             </tbody></table>
         )}
       </section>
+      {admin && <AdminAI notify={notify} />}
       {user && admin && (
         <section>
           <h3>People</h3>

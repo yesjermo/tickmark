@@ -507,3 +507,5 @@ td.num, .num { font-variant-numeric: tabular-nums; }
 .conn-name { flex: 1 1 280px; }
 .conn-actions { min-width: 0; margin-left: auto; flex-wrap: wrap; }
 .conn-state.st-setup { color: var(--warn); }
+.watch .quote { font-size: 11.5px; margin-left: auto; margin-right: 6px; white-space: nowrap; }
+.admin-ai { display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 14px; } .admin-ai .row { gap: 6px; align-items: center; } .admin-ai input:not([type=checkbox]) { flex: 1; }

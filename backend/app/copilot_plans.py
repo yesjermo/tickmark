@@ -22,7 +22,7 @@ import os
 import time
 from datetime import datetime, timezone
 
-from . import portal
+from . import portal, server_settings
 
 PLANS = {
     "free": {"name": "Free · Claude", "provider": "anthropic", "key_env": ("ANTHROPIC_API_KEY",), "limit_env": "SWINGDESK_FREE_MESSAGES",
@@ -41,16 +41,16 @@ CACHE_SECONDS = 6 * 3600
 
 
 def _on(name: str, default: str = "off") -> bool:
-    return os.environ.get(name, default).lower() in ("on", "1", "true")
+    return (server_settings.get(name) or default).lower() in ("on", "1", "true")
 
 
 def operator_key(plan: str) -> str | None:
-    return next((os.environ[k] for k in PLANS[plan]["key_env"] if os.environ.get(k)), None)
+    return next((server_settings.get(k) for k in PLANS[plan]["key_env"] if server_settings.get(k)), None)
 
 
 def _enabled(plan: str) -> bool:
     if plan == "oss":
-        return bool(os.environ.get("SWINGDESK_OSS_BASE_URL"))
+        return bool(server_settings.get("SWINGDESK_OSS_BASE_URL"))
     return _on("SWINGDESK_FREE_TIER") and bool(operator_key(plan))
 
 
@@ -60,8 +60,24 @@ def config() -> dict:
         out[plan] = {"enabled": _enabled(plan), "limit": int(os.environ.get(p["limit_env"], str(p["limit"]))), "period": p["period"],
                      "model": os.environ.get(p["model_env"]) or p["default_model"] or (_model_cache.get(plan, (0, None))[1]),
                      "provider": p["provider"]}
-    out["oss"]["base_url"] = os.environ.get("SWINGDESK_OSS_BASE_URL", "")
+    out["oss"]["base_url"] = server_settings.get("SWINGDESK_OSS_BASE_URL") or ""
+    # Several open models can be offered at once (SWINGDESK_OSS_MODELS=gemma4:12b,gpt-oss:20b,qwen3.5:9b); users pick one.
+    listed = [m.strip() for m in (server_settings.get("SWINGDESK_OSS_MODELS") or "").split(",") if m.strip()]
+    out["oss"]["models"] = listed or [out["oss"]["model"]]
+    if listed and not os.environ.get("SWINGDESK_OSS_MODEL"):
+        out["oss"]["model"] = listed[0]
     return out
+
+
+OPEN_MODEL_NAMES = {"gemma4": "Google Gemma 4", "gemma3": "Google Gemma 3", "gpt-oss": "OpenAI gpt-oss", "qwen3.5": "Qwen 3.5",
+                    "qwen3": "Qwen 3", "llama3.3": "Meta Llama 3.3", "llama4": "Meta Llama 4", "mistral": "Mistral", "deepseek-r1": "DeepSeek R1"}
+
+
+def open_model_label(model_id: str) -> str:
+    """'gemma4:12b' -> 'Google Gemma 4 12B' (falls back to the raw id)."""
+    fam, _, size = model_id.partition(":")
+    name = OPEN_MODEL_NAMES.get(fam)
+    return f"{name} {size.upper()}".strip() if name else model_id
 
 
 def model_for(plan: str) -> str:
@@ -140,6 +156,11 @@ def summary() -> list[dict]:
         model = c["model"] or ("newest GPT" if plan == "free_gpt" else "newest Gemini" if plan == "free_gemini" else "")
         note = (f"{c['model'] or 'the newest model'} hosted by this server, free (fair use {c['limit']}/day)" if plan == "oss" else
                 f"{c['limit']} messages a month with {model}, paid for by this server")
-        out.append({"id": plan, "enabled": c["enabled"], "limit": c["limit"], "period": c["period"],
-                    "used": used(plan) if c["enabled"] else 0, "model": model, "name": p["name"], "note": note})
+        row = {"id": plan, "enabled": c["enabled"], "limit": c["limit"], "period": c["period"],
+               "used": used(plan) if c["enabled"] else 0, "model": model, "name": p["name"], "note": note}
+        if plan == "oss":
+            row["models"] = [{"id": m, "label": open_model_label(m)} for m in c["models"]]
+            if len(c["models"]) > 1:
+                row["note"] = f"open models hosted by this server, free (fair use {c['limit']}/day): " + ", ".join(open_model_label(m) for m in c["models"])
+        out.append(row)
     return out

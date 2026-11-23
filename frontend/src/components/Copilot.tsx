@@ -3,11 +3,12 @@ import { api, ApiError } from "../api";
 import type { Level } from "../App";
 
 interface ModelInfo { id: string; name: string; price: string; note: string }
-interface Plan { id: string; name: string; enabled: boolean; used: number; limit: number; period: string; model: string; note: string }
+interface Plan { id: string; name: string; enabled: boolean; used: number; limit: number; period: string; model: string; note: string;
+  models?: { id: string; label: string }[] }
 interface CopilotStatus { configured: boolean; ready?: boolean; plans?: Plan[]; claude_configured: boolean; source: string | null; key_hint: string | null; model: string;
   model_label: string; effort: string; local_loopback: boolean; models: ModelInfo[];
   cloud?: Record<"openai" | "gemini", { name: string; configured: boolean; key_hint: string | null; model: string | null; billed: string; keys_at: string }>;
-  settings: { model: string; local_base_url: string; local_model: string };
+  settings: { model: string; local_base_url: string; local_model: string; oss_model?: string };
   threads: { id: string; title: string; model: string | null; updated_at: string }[] }
 interface LocalModels { reachable: boolean; base_url: string; models: string[]; loopback: boolean; error?: string }
 
@@ -100,6 +101,14 @@ function ModelPicker({ st, onSaved, notify }: { st: CopilotStatus; onSaved: (s: 
       {info && <p className="small muted">{info.note}{!st.claude_configured && " Add your key below to use it."}</p>}
       {(st.model === "openai" || st.model === "gemini") && st.cloud && (
         <CloudProvider id={st.model} c={st.cloud[st.model]} onSaved={onSaved} notify={notify} />
+      )}
+      {plan?.id === "oss" && plan.enabled && (plan.models?.length ?? 0) > 1 && (
+        <label className="small muted">Open model
+          <select value={st.settings.oss_model && plan.models!.some((m) => m.id === st.settings.oss_model) ? st.settings.oss_model : plan.models![0].id}
+            onChange={async (e) => { try { onSaved(await api.put<CopilotStatus>("/api/copilot/settings", { model: "oss", oss_model: e.target.value })); } catch (err) { notify((err as ApiError).message); } }}>
+            {plan.models!.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+        </label>
       )}
       {plan && (
         <div className="usage" aria-label={`${plan.used} of ${plan.limit} messages used`}>

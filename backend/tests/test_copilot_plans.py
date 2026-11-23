@@ -88,3 +88,23 @@ def test_open_source_plan_can_use_a_hosted_service_with_a_key(confirmed, monkeyp
     monkeypatch.setattr(copilot, "CLIENT_FACTORY", None)
     r = confirmed.post("/api/copilot/chat", json={"text": "hi", "model": "oss"}).json()
     assert r["reply"] == "Hosted open model answer." and seen == {"auth": "Bearer gsk_test_123", "model": "qwen/qwen3-32b"}
+
+
+def test_free_open_plan_offers_several_models_and_users_pick(confirmed, monkeypatch):
+    monkeypatch.setenv("SWINGDESK_OSS_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("SWINGDESK_OSS_MODELS", "gemma4:12b,gpt-oss:20b,qwen3.5:9b")
+    seen = []
+
+    def handle(req):
+        seen.append(json.loads(req.content)["model"])
+        return httpx.Response(200, json=oa("ok"))
+    monkeypatch.setattr(copilot, "LOCAL_TRANSPORT", httpx.MockTransport(handle))
+    monkeypatch.setattr(copilot, "CLIENT_FACTORY", None)
+    oss = next(p for p in confirmed.get("/api/copilot").json()["plans"] if p["id"] == "oss")
+    assert [m["label"] for m in oss["models"]] == ["Google Gemma 4 12B", "OpenAI gpt-oss 20B", "Qwen 3.5 9B"]
+    confirmed.post("/api/copilot/chat", json={"text": "x", "model": "oss"})
+    st = confirmed.put("/api/copilot/settings", json={"model": "oss", "oss_model": "gpt-oss:20b"}).json()
+    assert st["model_label"] == "Open-source · free (OpenAI gpt-oss 20B)"
+    r = confirmed.post("/api/copilot/chat", json={"text": "y"}).json()
+    assert seen == ["gemma4:12b", "gpt-oss:20b"] and r["model"] == "oss:gpt-oss:20b"
+    assert confirmed.put("/api/copilot/settings", json={"model": "oss", "oss_model": "llama-secret"}).status_code == 400

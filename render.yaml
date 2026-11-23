@@ -1,7 +1,7 @@
 # Render blueprint for Tickmark (dashboard → New → Blueprint → this repo).
-# Free plan: the instance sleeps after ~15 minutes idle and its disk is NOT persistent, so accounts, journals and
-# linked keys are lost on every redeploy or restart. Fine for trying it out; move to a paid plan with a disk
-# (or another host with a volume) before real clients rely on it. See README → Hosting.
+# Free plan: the instance sleeps after ~15 minutes idle and its disk is wiped on every sleep, restart or redeploy.
+# Set SWINGDESK_BACKUP_REPO + SWINGDESK_BACKUP_TOKEN and Tickmark keeps an encrypted backup in your private GitHub
+# repo and restores it on every start, so accounts and data survive. See README → Hosting.
 services:
   - type: web
     name: tickmark
@@ -12,8 +12,12 @@ services:
     envVars:
       - key: SWINGDESK_PORTAL          # multi-user sign-in, per-user data and encrypted keys
         value: "on"
-      - key: SWINGDESK_OPEN_SIGNUP     # invite-only: the admin hands out invite codes
-        value: "off"
+      - key: SWINGDESK_OPEN_SIGNUP     # open to the public: anyone can create an account (the first admin still needs the setup code)
+        value: "on"
+      - key: SWINGDESK_BACKUP_REPO     # owner/name of a PRIVATE GitHub repo that holds the encrypted data backup
+        sync: false
+      - key: SWINGDESK_BACKUP_TOKEN    # fine-grained GitHub token: Contents read/write on that one repo only
+        sync: false
       - key: SWINGDESK_SETUP_CODE      # needed once, to create the admin account (read it in the Render dashboard)
         generateValue: true
       - key: SWINGDESK_MASTER_KEY      # encrypts each user's broker, exchange and AI keys

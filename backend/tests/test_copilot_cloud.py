@@ -156,3 +156,25 @@ def test_free_plans_off_unless_the_operator_turns_them_on(confirmed, cloud, monk
     monkeypatch.setenv("OPENAI_API_KEY", KEYS["openai"])                                        # key alone is not enough
     r = confirmed.post("/api/copilot/chat", json={"text": "x", "model": "free_gpt"})
     assert r.status_code == 409 and "isn't offered" in r.json()["detail"]
+
+
+def test_admin_adds_free_plan_keys_in_the_app(client, cloud, monkeypatch):
+    monkeypatch.setenv("SWINGDESK_PORTAL", "on")
+    monkeypatch.setattr(portal, "_fail", {})
+    monkeypatch.setattr(copilot_plans, "_model_cache", {})
+    cloud(oa("Free Gemini answer."))
+    admin, user = TestClient(client.app, headers={"x-swingdesk": "1"}), TestClient(client.app, headers={"x-swingdesk": "1"})
+    admin.post("/api/auth/signup", json={"email": "owner@example.com", "password": "correct horse battery"})
+    code = admin.post("/api/portal/invites", json={}).json()["code"]
+    user.post("/api/auth/signup", json={"email": "u@example.com", "password": "correct horse battery", "invite": code})
+    assert user.get("/api/admin/ai").status_code == 403                                           # admin only
+    bad = admin.put("/api/admin/ai", json={"keys": {"GEMINI_API_KEY": "wrong"}})
+    assert bad.status_code == 400
+    st = admin.put("/api/admin/ai", json={"keys": {"GEMINI_API_KEY": KEYS["gemini"]}, "free_tier": True}).json()
+    assert st["free_tier"] and st["keys"]["GEMINI_API_KEY"]["source"] == "app" and KEYS["gemini"] not in json.dumps(st)
+    assert next(p for p in st["plans"] if p["id"] == "free_gemini")["enabled"]
+    r = user.post("/api/copilot/chat", json={"text": "hi", "model": "free_gemini"}).json()
+    assert r["reply"] == "Free Gemini answer."                                                      # a normal user gets it free
+    from app import db
+    raw = (db.DATA_DIR / "server" / "secrets.enc").read_bytes()
+    assert KEYS["gemini"].encode() not in raw                                                       # encrypted at rest

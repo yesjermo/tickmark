@@ -149,3 +149,12 @@ def test_quality_flags_missing_session_and_jump(client):
     rep2 = market_data.check_quality(conn, ["XYZ"], "2026-11-20")["XYZ"]
     assert not any(i["kind"] == "unexplained_jump" for i in rep2["issues"])   # explained by a recorded split
     conn.close()
+
+
+def test_quotes_endpoint_needs_live_data_and_labels_the_feed(client, monkeypatch, world):
+    from app import intraday
+    assert client.get("/api/quotes").json()["quotes"] == {}                       # Backtest: simulated prices, no quotes
+    monkeypatch.setattr(intraday, "latest_trades", lambda syms: {s: {"price": 100.0, "t": "2026-11-23T14:31:00Z", "feed": "iex"} for s in syms})
+    assert client.put("/api/data/mode", json={"mode": "live"}).status_code == 200
+    q = client.get("/api/quotes").json()["quotes"]
+    assert q and all(v["feed"] == "iex" and v["prev_close"] and v["change_pct"] is not None for v in q.values())

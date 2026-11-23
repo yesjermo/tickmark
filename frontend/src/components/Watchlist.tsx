@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { Screen } from "../App";
 import { StatusChip, num } from "./ui";
@@ -8,6 +8,15 @@ export function Watchlist({ screen, live, selected, onSelect, onChanged, notify 
 }) {
   const [add, setAdd] = useState("");
   const [busy, setBusy] = useState(false);
+  const [quotes, setQuotes] = useState<Record<string, { price: number; t: string; change_pct: number | null }>>({});
+  useEffect(() => {
+    if (!live) { setQuotes({}); return; }
+    const load = () => api.get<{ quotes: typeof quotes }>("/api/quotes").then((r) => setQuotes(r.quotes)).catch(() => {});
+    load();
+    const id = setInterval(load, 60000);              // latest trades refresh every minute
+    return () => clearInterval(id);
+  }, [live]);
+  const et = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET";
   if (!screen) return <div className="pad muted">Loading…</div>;
   const symbols = [...screen.results.map((r) => r.symbol), ...Object.keys(screen.errors ?? {})];
 
@@ -46,6 +55,12 @@ export function Watchlist({ screen, live, selected, onSelect, onChanged, notify 
                 </div>
                 <div className="row2">
                   <StatusChip s={r.status} />
+                  {quotes[r.symbol] && (
+                    <span className={`quote num ${(quotes[r.symbol].change_pct ?? 0) >= 0 ? "gain" : "loss"}`}
+                      title={`Latest trade (IEX feed) at ${et(quotes[r.symbol].t)}. Rules still use the completed daily close.`}>
+                      {num(quotes[r.symbol].price)}{quotes[r.symbol].change_pct != null && ` ${quotes[r.symbol].change_pct! >= 0 ? "+" : ""}${quotes[r.symbol].change_pct}%`}
+                    </span>
+                  )}
                   <span className="dots" aria-label="rule results">
                     {r.rules.map((x) => <i key={x.id} className={`d-${x.result}`} title={`${x.name}: ${x.result}`} />)}
                   </span>
@@ -76,7 +91,7 @@ export function Watchlist({ screen, live, selected, onSelect, onChanged, notify 
       </ul>
       <p className="legend small muted">
         {screen.as_of ? `Screened on the completed daily bar of ${screen.as_of}.` : "No data loaded yet."} Dots: one per rule, in order.
-        {live && " Live mode never uses today's bar until 16:15 ET."}
+        {live && " Rules use completed bars only; the colored figure is the latest trade (IEX feed, refreshed each minute)."}
       </p>
     </div>
   );

@@ -57,8 +57,13 @@ DAYMON = None
 @asynccontextmanager
 async def lifespan(app):
     global SCHED, STREAM, DAYMON
-    from . import day_monitor
+    from . import backup, day_monitor
+    try:
+        print("data backup:", backup.restore_if_empty(), flush=True)     # fresh disk after a sleep/redeploy: bring data back
+    except Exception as exc:
+        print("data backup restore failed:", exc, flush=True)
     portal.for_each_tenant(lambda: ensure_db(db.data_mode()))
+    backup.BACKUP.start()
     SCHED = scheduler.Scheduler()
     SCHED.start()
     STREAM = streaming.OrderStream()
@@ -70,6 +75,7 @@ async def lifespan(app):
     SCHED.stop()
     STREAM.stop()
     DAYMON.stop()
+    backup.BACKUP.stop()
 
 
 app = FastAPI(title="Tickmark API", lifespan=lifespan)
@@ -176,6 +182,8 @@ def auth_signup(body: SignupIn, request: Request):
         ensure_db("demo")
         ensure_db("live")
     token, u = portal.login(body.email, body.password, request.client.host if request.client else "")
+    from . import backup
+    backup.BACKUP.request()                     # save the new account off-site right away
     return _cookie(JSONResponse({"user": u}), request, token)
 
 
@@ -201,6 +209,82 @@ def portal_invite(body: InviteIn, request: Request):
 @app.get("/api/portal/users")
 def portal_users(request: Request):
     return portal.list_users(_me(request))
+
+
+class AdminAIIn(BaseModel):
+    free_tier: bool | None = None
+    keys: dict[str, str | None] = Field(default_factory=dict)     # ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / SWINGDESK_OSS_API_KEY
+    oss_base_url: str | None = None
+    oss_models: str | None = None
+
+
+def _admin(request: Request) -> dict:
+    me = _me(request)
+    if me.get("role") != "admin":
+        raise HTTPException(403, "Only the administrator can change the server's AI settings.")
+    return me
+
+
+def _admin_ai_state() -> dict:
+    from . import copilot_plans, server_settings as ss
+    hint = lambda v: (v[:4] + "…" + v[-4:]) if v and len(v) > 10 else ("set" if v else None)  # noqa: E731
+    return {"free_tier": copilot_plans._on("SWINGDESK_FREE_TIER"), "free_tier_source": ss.source("SWINGDESK_FREE_TIER"),
+            "keys": {k: {"hint": hint(ss.get(k)), "source": ss.source(k)} for k in ss.SECRETS},
+            "oss_base_url": ss.get("SWINGDESK_OSS_BASE_URL"), "oss_models": ss.get("SWINGDESK_OSS_MODELS"),
+            "plans": copilot_plans.summary()}
+
+
+@app.get("/api/admin/ai")
+def admin_ai(request: Request):
+    _admin(request)
+    return _admin_ai_state()
+
+
+@app.put("/api/admin/ai")
+def admin_ai_save(body: AdminAIIn, request: Request):
+    """The admin turns on free copilot plans by adding the server's own keys (each checked with a free call first)."""
+    _admin(request)
+    import httpx
+    from . import copilot_plans, server_settings as ss
+    for name, val in body.keys.items():
+        if name not in ss.SECRETS:
+            raise HTTPException(400, f"Unknown key '{name}'.")
+        if ss.source(name) == "environment":
+            raise HTTPException(409, f"{name} is set in the server's environment; change it there.")
+        val = (val or "").strip()
+        if val:
+            try:
+                if name == "ANTHROPIC_API_KEY":
+                    import anthropic
+                    anthropic.Anthropic(api_key=val, max_retries=0, timeout=15).models.retrieve(copilot_mod.MODEL)
+                elif name in ("OPENAI_API_KEY", "GEMINI_API_KEY"):
+                    copilot_mod.cloud_models("openai" if name == "OPENAI_API_KEY" else "gemini", val)
+                else:
+                    base = (body.oss_base_url or ss.get("SWINGDESK_OSS_BASE_URL") or "").rstrip("/")
+                    if base:
+                        r = httpx.get(base + "/models", headers={"Authorization": f"Bearer {val}"}, timeout=15)
+                        if r.status_code in (401, 403):
+                            raise HTTPException(400, "The open-model service rejected that key.")
+            except HTTPException:
+                raise
+            except copilot_mod.CopilotError as exc:
+                raise HTTPException(400, str(exc))
+            except Exception as exc:
+                raise HTTPException(400, f"Couldn't check {name}: {exc}"[:200])
+        ss.set(name, val or None)
+        copilot_plans._model_cache.clear()
+    if body.oss_base_url is not None:
+        u = body.oss_base_url.strip().rstrip("/")
+        if u and not u.startswith(("http://", "https://")):
+            raise HTTPException(400, "The open-model server URL must start with http:// or https://")
+        ss.set("SWINGDESK_OSS_BASE_URL", u or None)
+    if body.oss_models is not None:
+        ss.set("SWINGDESK_OSS_MODELS", ",".join(m.strip() for m in body.oss_models.split(",") if m.strip()) or None)
+    if body.free_tier is not None:
+        if ss.source("SWINGDESK_FREE_TIER") == "environment":
+            raise HTTPException(409, "SWINGDESK_FREE_TIER is set in the server's environment; change it there.")
+        ss.set("SWINGDESK_FREE_TIER", "on" if body.free_tier else None)
+    return _admin_ai_state()
 
 
 @app.get("/api/mcp/tokens")
@@ -449,6 +533,23 @@ def json_dumps(o):
 def screen():
     with db.tx() as c:   # screening records forward-test signals; keep those writes atomic
         return trading.screen(c)
+
+
+@app.get("/api/quotes")
+def quotes():
+    """Latest trades for the watchlist (live data with an Alpaca key), next to each symbol's last completed close."""
+    from . import intraday
+    c = conn()
+    try:
+        if db.data_mode() != "live":
+            return {"quotes": {}, "note": "Backtest uses simulated prices; switch to Live test for real quotes."}
+        syms = db.kv_get(c, "watchlist", [])
+        closes = {s: trading._last_close(c, s) for s in syms}
+    finally:
+        c.close()
+    q = intraday.latest_trades(syms)
+    return {"quotes": {s: {**v, "prev_close": closes.get(s), "change_pct": round((v["price"] / closes[s] - 1) * 100, 2) if closes.get(s) else None}
+                       for s, v in q.items()}}
 
 
 @app.get("/api/symbols/{symbol}/evaluation")
@@ -989,6 +1090,7 @@ class CopilotSettingsIn(BaseModel):
     local_model: str | None = None
     openai_model: str | None = None
     gemini_model: str | None = None
+    oss_model: str | None = None
 
 
 @app.get("/api/copilot")
@@ -1013,7 +1115,7 @@ def copilot_chat(body: CopilotChatIn):
 
 @app.put("/api/copilot/settings")
 def copilot_settings(body: CopilotSettingsIn):
-    return copilot_mod.save_settings(body.model, body.local_base_url, body.local_model, body.openai_model, body.gemini_model)
+    return copilot_mod.save_settings(body.model, body.local_base_url, body.local_model, body.openai_model, body.gemini_model, body.oss_model)
 
 
 @app.put("/api/copilot/providers/{provider}/key")
