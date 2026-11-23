@@ -770,7 +770,7 @@ input, select, textarea { background: var(--panel); border-color: var(--line-2);
 
 /* ---- TradingView widgets ---- */
 .chart-card { display: flex; flex-direction: column; }
-.chart-card > div:not(.seg):not(.empty) { flex: 1; min-height: 0; }
+.chart-card > .chart-body { min-height: 0; }
 .chart-src { position: absolute; top: 8px; right: 70px; z-index: 3; background: var(--panel-2); }
 .chart-src button { padding: 3px 11px; font-size: 12px; }
 .tv-chart { height: 100%; width: 100%; border-radius: calc(var(--radius) - 4px); overflow: hidden; }
@@ -855,3 +855,26 @@ button, a, select, label, [role=button] { touch-action: manipulation; -webkit-ta
   .workspace { grid-auto-rows: max-content; align-content: start; }
   .center { min-height: auto; }
 }
+
+/* ---- fit-to-screen desktop layout (no page scroll; only long lists scroll inside their block) ---- */
+.chart-card { height: clamp(300px, 44vh, 560px); padding: 8px 8px 6px; }
+.chart-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 4px 6px; }
+.chart-bar .seg { background: var(--panel-2); }
+.chart-bar .seg button { padding: 3px 10px; font-size: 12px; }
+.chart-body { flex: 1; min-height: 0; position: relative; }
+.chart-body .chart-wrap { height: 100%; }
+.chart-src { display: none; }
+.tv-tape { height: 52px; }
+.pf-graph { display: flex; flex-direction: column; min-height: 0; }
+.pf-graph .eq-chart { flex: 1; min-height: 140px; }
+.pf-graph p { margin: 6px 0 0; }
+@media (min-width: 1101px) and (min-height: 640px) {
+  .center-body:has(> .portfolio) { overflow: hidden; display: flex; flex-direction: column; padding-bottom: 14px; }
+  .portfolio { flex: 1; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; padding-top: 10px; gap: 12px; }
+  .portfolio > .small.muted { display: none; }
+  .pf-grid { max-height: 34vh; min-height: 0; }
+  .pf-grid > .pf-block { overflow-y: auto; overscroll-behavior: contain; }
+  .pf-hero { padding: 16px 20px; }
+}
+.chart-card > .chart-bar { flex: none; }
+.chart-card > .chart-body { flex: 1 1 auto; }

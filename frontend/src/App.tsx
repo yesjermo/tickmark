@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, Evaluation, Order, Ruleset, Status_ } from "./api";
 import { TopBar } from "./components/TopBar";
 import { Watchlist } from "./components/Watchlist";
-import { PriceChart } from "./components/PriceChart";
+import { PriceChart, Interval, Range } from "./components/PriceChart";
 import { Evidence } from "./components/Evidence";
 import { StrategyPanel } from "./components/StrategyPanel";
 import { OrderTicket } from "./components/OrderTicket";
@@ -89,6 +89,12 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
   const comfort = useComfort();
   const [chartSrc, setChartSrc] = useState<"rules" | "tv">(() => { try { return (localStorage.getItem("tickmark.chart") as "rules" | "tv") || "rules"; } catch { return "rules"; } });
   const pickChart = (c: "rules" | "tv") => { setChartSrc(c); try { localStorage.setItem("tickmark.chart", c); } catch { /* private mode */ } };
+  const [tf, setTf] = useState<{ interval: Interval; range: Range }>(() => { try { return JSON.parse(localStorage.getItem("tickmark.tf") || "") } catch { return { interval: "D", range: "6M" }; } });
+  const pickTf = (next: Partial<{ interval: Interval; range: Range }>) => {
+    const v = { ...tf, ...next };
+    setTf(v); try { localStorage.setItem("tickmark.tf", JSON.stringify(v)); } catch { /* private mode */ }
+    if (next.interval && !["D", "W", "M"].includes(next.interval)) pickChart("tv");   // intraday candles come from TradingView
+  };
   const [cryptoPrefill, setCryptoPrefill] = useState<CryptoForm | null>(null);
   const [prefill, setPrefill] = useState<{ symbol: string; overrides: Record<string, any>; n: number } | null>(null);
 
@@ -214,14 +220,32 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
           {/* Hidden (not unmounted) while day trading, so the daily chart isn't torn down and rebuilt. */}
           <section className="chart-card card" style={center === "day" || center === "crypto" || center === "connections" || center === "portfolio" ? { display: "none" } : undefined}>
             {/* Keep the chart mounted across refreshes and mode switches; show the empty state on top of it. */}
-            <div className="seg chart-src" role="group" aria-label="Chart source">
-              <button className={chartSrc === "rules" ? "on" : ""} onClick={() => pickChart("rules")} title="Tickmark's chart: completed bars, rule markers and the planned stop">Rules</button>
-              <button className={chartSrc === "tv" ? "on" : ""} onClick={() => pickChart("tv")} title="TradingView's live chart and indicators">TradingView</button>
+            <div className="chart-bar">
+              <div className="seg" role="group" aria-label="Chart source">
+                <button className={chartSrc === "rules" ? "on" : ""} onClick={() => { pickChart("rules"); if (!["D", "W", "M"].includes(tf.interval)) pickTf({ interval: "D" }); }}
+                  title="Tickmark's chart: completed bars, rule markers and the planned stop">Rules</button>
+                <button className={chartSrc === "tv" ? "on" : ""} onClick={() => pickChart("tv")} title="TradingView's chart: live (15-minute delayed) prices and indicators">TradingView</button>
+              </div>
+              <div className="seg" role="group" aria-label="Candle size">
+                {(["5", "15", "60", "D", "W", "M"] as Interval[]).map((i) => (
+                  <button key={i} className={tf.interval === i ? "on" : ""} onClick={() => pickTf({ interval: i })}
+                    title={["D", "W", "M"].includes(i) ? undefined : "Intraday candles open in the TradingView view"}>
+                    {({ "5": "5m", "15": "15m", "60": "1h", D: "1D", W: "1W", M: "1M" } as Record<string, string>)[i]}</button>
+                ))}
+              </div>
+              {["D", "W", "M"].includes(tf.interval) && (
+                <div className="seg" role="group" aria-label="Time range">
+                  {(["1M", "3M", "6M", "1Y", "2Y"] as Range[]).map((r) => (
+                    <button key={r} className={tf.range === r ? "on" : ""} onClick={() => pickTf({ range: r })}>{r}</button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div style={chartSrc === "tv" ? { display: "none" } : { height: "100%" }}>
-              <PriceChart symbol={ev?.symbol ?? selected} tick={tick} evaluation={ev} journal={journal} live={live} />
+            <div className="chart-body" style={chartSrc === "tv" ? { display: "none" } : undefined}>
+              <PriceChart symbol={ev?.symbol ?? selected} tick={tick} evaluation={ev} journal={journal} live={live}
+                interval={["D", "W", "M"].includes(tf.interval) ? tf.interval : "D"} range={tf.range} />
             </div>
-            {chartSrc === "tv" && <TVChart symbol={ev?.symbol ?? selected} />}
+            {chartSrc === "tv" && <div className="chart-body"><TVChart symbol={ev?.symbol ?? selected} interval={tf.interval} range={tf.range} /></div>}
             {!ev && chartSrc === "rules" && <div className="empty overlay">{screen?.needs_refresh ? "No live data yet. Click Refresh live data in the top bar." : "Loading…"}</div>}
           </section>
           <div className="center-head">

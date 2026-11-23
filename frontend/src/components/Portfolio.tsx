@@ -19,15 +19,17 @@ const WS: Record<string, string> = { backtest: "Backtest account", test: "Paper 
 function EquityChart({ hist }: { hist: Hist[] }) {
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(640);
+  const [H, setH] = useState(220);
   const [hover, setHover] = useState<number | null>(null);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setW(Math.max(280, e.contentRect.width)));
+    // The graph takes whatever height the dashboard leaves it, so the whole dashboard fits the window.
+    const ro = new ResizeObserver(([e]) => { setW(Math.max(280, e.contentRect.width)); setH(Math.max(140, Math.min(520, e.contentRect.height))); });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const H = 220, L = 8, R = 64, T = 12, B = 26;
+  const L = 8, R = 64, T = 12, B = 26;
   const pts = hist.map((h) => ({ t: new Date(h.ts).getTime(), v: h.equity + h.linked_usd }));
   const { x, y, ticks, path, area } = useMemo(() => {
     const t0 = pts[0]?.t ?? 0, t1 = pts[pts.length - 1]?.t ?? 1;
@@ -41,7 +43,7 @@ function EquityChart({ hist }: { hist: Hist[] }) {
     const path = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
     const area = pts.length > 1 ? `${path}L${x(pts[pts.length - 1].t).toFixed(1)},${H - B}L${x(pts[0].t).toFixed(1)},${H - B}Z` : "";
     return { x, y, ticks, path, area };
-  }, [pts, w]);
+  }, [pts, w, H]);
   const hp = hover != null ? pts[hover] : null;
   function move(e: React.PointerEvent<SVGSVGElement>) {
     const r = e.currentTarget.getBoundingClientRect();
@@ -104,7 +106,7 @@ export function Portfolio({ tick, notify }: { tick: number; notify: (s: string) 
         </dl>
       </section>
 
-      <section className="pf-block">
+      <section className="pf-block pf-graph">
         <h3>Total value over time</h3>
         <EquityChart hist={p.history} />
         {p.history.length < 3 && <p className="small muted">The graph fills in as you use the desk: the value is recorded at most every 15 minutes.</p>}
@@ -124,7 +126,7 @@ export function Portfolio({ tick, notify }: { tick: number; notify: (s: string) 
             ))}
           </ul>
         </section>
-        <section className="pf-block">
+        <section className="pf-block pf-positions">
           <h3>Positions</h3>
           {p.positions.length === 0 ? <p className="small muted">No open positions. Paper trades you place show up here with their cost and P&amp;L.</p> : (
             <table className="pf-table">

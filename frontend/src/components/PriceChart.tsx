@@ -5,11 +5,36 @@ import { api, Evaluation } from "../api";
 interface Bar { time: string; open: number; high: number; low: number; close: number; volume: number }
 interface Overlay { name: string; values: { time: string; value: number }[] }
 
+export type Interval = "5" | "15" | "60" | "D" | "W" | "M";
+export type Range = "1M" | "3M" | "6M" | "1Y" | "2Y";
+export const RANGE_SESSIONS: Record<Range, number> = { "1M": 22, "3M": 64, "6M": 128, "1Y": 253, "2Y": 505 };
+
+/** Weekly / monthly candles from the daily bars: first open, highest high, lowest low, last close, summed volume. */
+function rollup(bars: Bar[], interval: Interval): Bar[] {
+  if (interval === "D") return bars;
+  const keyOf = (t: string) => {
+    if (interval === "M") return t.slice(0, 7);
+    const d = new Date(t + "T12:00:00Z");
+    const monday = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400000);
+    return monday.toISOString().slice(0, 10);
+  };
+  const out: Bar[] = [];
+  let cur: Bar | null = null, k = "";
+  for (const b of bars) {
+    const kk = keyOf(b.time);
+    if (!cur || kk !== k) { if (cur) out.push(cur); cur = { ...b }; k = kk; continue; }
+    cur.high = Math.max(cur.high, b.high); cur.low = Math.min(cur.low, b.low); cur.close = b.close; cur.volume += b.volume;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
 function css(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-export function PriceChart({ symbol, tick, evaluation, journal, live }: { symbol: string; tick: number; evaluation: Evaluation | null; journal: any[]; live: boolean }) {
+export function PriceChart({ symbol, tick, evaluation, journal, live, interval = "D", range = "6M" }: {
+  symbol: string; tick: number; evaluation: Evaluation | null; journal: any[]; live: boolean; interval?: Interval; range?: Range }) {
   const el = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const series = useRef<{ c: ISeriesApi<"Candlestick">; lines: ISeriesApi<"Line">[]; v: ISeriesApi<"Histogram"> } | null>(null);
@@ -42,9 +67,11 @@ export function PriceChart({ symbol, tick, evaluation, journal, live }: { symbol
 
   useEffect(() => {
     let cancelled = false;   // a response arriving after unmount or a symbol switch must not touch a disposed chart
-    api.get<{ bars: Bar[]; overlays: Overlay[]; strategy_name: string; source: string }>(`/api/symbols/${symbol}/chart?sessions=120`).then((d) => {
+    api.get<{ bars: Bar[]; overlays: Overlay[]; strategy_name: string; source: string }>(`/api/symbols/${symbol}/chart?sessions=${RANGE_SESSIONS[range]}`).then((d0) => {
       const s = series.current;
       if (cancelled || !s) return;
+      const daily = interval === "D";
+      const d = { ...d0, bars: rollup(d0.bars.filter((b) => b.close != null), interval), overlays: daily ? d0.overlays : [] };   // daily averages don't belong on weekly candles
       s.c.setData(d.bars.map((b) => ({ time: b.time as Time, open: b.open, high: b.high, low: b.low, close: b.close })));
       s.lines.forEach((ls, k) => {
         const o = d.overlays[k];
@@ -68,11 +95,14 @@ export function PriceChart({ symbol, tick, evaluation, journal, live }: { symbol
         if (j.exit_date) markers.push({ time: j.exit_date as Time, position: "aboveBar", shape: "arrowDown", color: css("--text"), text: `exit (${j.exit_reason})` });
       }
       const inRange = new Set(d.bars.map((b) => b.time));
-      s.c.setMarkers(markers.filter((m) => inRange.has(m.time as string)).sort((a, b) => (a.time as string).localeCompare(b.time as string)));
-      chart.current?.timeScale().setVisibleLogicalRange({ from: d.bars.length - 75, to: d.bars.length + 3 });
+      s.c.setMarkers(daily ? markers.filter((m) => inRange.has(m.time as string)).sort((a, b) => (a.time as string).localeCompare(b.time as string)) : []);
+      // Fit after layout: a view zoomed for the previous candle size (or a size measured while hidden) must not carry over.
+      const ts = chart.current?.timeScale();
+      ts?.resetTimeScale();
+      requestAnimationFrame(() => { if (!cancelled) chart.current?.timeScale().fitContent(); });
     }).catch(() => { /* chart fetch failed (e.g. no bars yet); leave the previous view */ });
     return () => { cancelled = true; };
-  }, [symbol, tick, evaluation, journal]);
+  }, [symbol, tick, evaluation, journal, interval, range]);
 
   // Stop level as a price line.
   useEffect(() => {
@@ -86,7 +116,7 @@ export function PriceChart({ symbol, tick, evaluation, journal, live }: { symbol
     <div className="chart-wrap">
       <div className="chart-head">
         <b>{symbol}</b>
-        <span className="muted small">Daily · completed bars · {meta?.strategy}{meta?.names.length ? ` · ${meta.names.join(", ")}` : ""}</span>
+        <span className="muted small">{({ D: "Daily", W: "Weekly", M: "Monthly" } as Record<string, string>)[interval] ?? "Daily"} · completed bars · {meta?.strategy}{meta?.names.length ? ` · ${meta.names.join(", ")}` : ""}</span>
         {live ? <span className="livetag" title={meta?.source}>real prices · {meta?.source?.startsWith("Alpaca") ? "Alpaca SIP (licensed)" : "Yahoo Finance"}</span> : <span className="simtag" title={meta?.source}>simulated prices</span>}
       </div>
       <div ref={el} className="chart" />

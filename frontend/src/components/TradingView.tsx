@@ -31,14 +31,17 @@ function useWidget(kind: string, config: Record<string, unknown>, deps: unknown[
 
 const theme = () => (document.documentElement.dataset.theme === "dark" ? "dark" : "light");
 
-export const TVChart = memo(function TVChart({ symbol }: { symbol: string }) {
+const TV_RANGE: Record<string, string | undefined> = { "1M": "1M", "3M": "3M", "6M": "6M", "1Y": "12M", "2Y": undefined };
+
+export const TVChart = memo(function TVChart({ symbol, interval = "D", range }: { symbol: string; interval?: string; range?: string }) {
   const t = theme();
+  const daily = ["D", "W", "M"].includes(interval);
   const box = useWidget("advanced-chart", {
-    symbol, interval: "D", timezone: "America/New_York", theme: t, style: "1", locale: "en", autosize: true,
+    symbol, interval, ...(daily && range && TV_RANGE[range] ? { range: TV_RANGE[range] } : {}), timezone: "America/New_York", theme: t, style: "1", locale: "en", autosize: true,
     backgroundColor: t === "dark" ? "#171b1e" : "#f8f7f4", gridColor: t === "dark" ? "#1e2327" : "#ebe9e4",
     hide_top_toolbar: false, hide_legend: false, allow_symbol_change: false, save_image: false, calendar: false,
-    studies: ["STD;EMA", "STD;RSI"], support_host: "https://www.tradingview.com",
-  }, [symbol, t]);
+    studies: ["STD;EMA"], support_host: "https://www.tradingview.com",
+  }, [symbol, t, interval, range]);
   return <div className="tradingview-widget-container tv-chart" ref={box} />;
 });
 
@@ -46,7 +49,8 @@ export const TVTape = memo(function TVTape({ symbols }: { symbols: string[] }) {
   const t = theme();
   const key = symbols.join(",");
   const box = useWidget("ticker-tape", {
-    symbols: [{ proName: "FOREXCOM:SPXUSD", title: "S&P 500" }, { proName: "FOREXCOM:NSXUSD", title: "Nasdaq 100" },
+    // Index CFDs (FOREXCOM:SPXUSD…) no longer load in free widgets; the SPY / QQQ ETFs track the same markets.
+    symbols: [{ proName: "AMEX:SPY", title: "S&P 500 (SPY)" }, { proName: "NASDAQ:QQQ", title: "Nasdaq 100 (QQQ)" },
       ...symbols.map((s) => ({ proName: s, title: s }))],
     showSymbolLogo: false, isTransparent: true, displayMode: "compact", colorTheme: t, locale: "en",
   }, [key, t]);

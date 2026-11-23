@@ -1,19 +1,38 @@
 # Tickmark
 
-**Live app (open sign-up):** https://tickmark-yqj2.onrender.com · **Project page:** https://yesjermo.github.io/tickmark-site/ (this repository, `tickmark`, is private; the page is published from the public `tickmark-site` repo).
+A research and trading desk that shows its reasons. You describe a setup in plain English, Tickmark turns it into rules you can read, screens your watchlist on real prices, shows the evidence behind every pass and fail, runs pre-trade risk checks, and records every trade in a journal that can't be rewritten. An AI copilot can research strategies and draft orders, but nothing happens until you click.
 
-A working prototype of a broker-connected research and paper-trading assistant for a US equity swing trader, inspired by HKUST's InvestLM. It answers one question end to end:
+- **Live app:** https://tickmark-yqj2.onrender.com (open to everyone; visitors start as guests)
+- **Project page:** https://yesjermo.github.io/tickmark-site/
+- **Install it as an app:** Chrome/Edge install icon in the top bar; iPhone Share → Add to Home Screen; Safari on Mac File → Add to Dock.
+
+This repository is private. Tickmark is decision-support software, not investment advice.
+
+## What's in it
+
+| Area | What you get |
+|---|---|
+| **Portfolio (home)** | Total balance across the trading account and linked accounts, cash, buying power, unrealized and realized P&L, win rate, a graph of total value over time, allocation and positions. Fits one screen on desktop; long lists scroll inside their block. |
+| **Charts** | Tickmark's chart (completed bars, rule markers, planned stop) or TradingView's chart. Candle size 5m / 15m / 1h / 1D / 1W / 1M and range 1M–2Y; intraday candles use TradingView. A TradingView ticker tape of the watchlist with SPY and QQQ. |
+| **Rules and evidence** | Five swing strategies and two intraday ones on one engine; each rule shows its threshold, what was observed, and pass/fail, for beginners or analysts. |
+| **Workspaces** | Backtest (simulated), Live test (real prices, paper orders), Live trading (real money, per account). |
+| **Connections** | Every broker, exchange and AI is a tile that opens its own connect window: sign in (OAuth, API keys, gateway), then switch real-money trading on in the same window. |
+| **Copilot** | Claude, GPT, Gemini or free open models (Gemma 4, Qwen 3.5, a small OpenAI gpt-oss). Researches strategies and drafts rules, orders and exits for you to approve. |
+| **Accounts** | Guests get a view-only desk on real prices with paper trading; sign-up keeps it. "Remember me" keeps a browser signed in for 30 days. Per-user encrypted keys; data backed up to a private GitHub repo. |
+| **Comfort** | Light warm-stone theme and a dark theme, focus (ADHD-friendly) mode with one next step and a 25-minute timer, generated background music, custom cursor. |
+| **Safety** | Paper first, a kill switch, stops at the broker, a typed phrase before any account trades real money and the ticker typed for every live order. |
+
+## Contents
+
+[Quick start](#quick-start) · [Live mode](#live-mode) · [Copilot](#copilot-copilot-tab) · [Copilot plans](#copilot-plans-claude-gpt-and-gemini-free-with-sign-in-or-on-your-own-key) · [Connections](#connections-page-sign-in-to-brokers-exchanges-and-ai) · [Interface](#interface) · [Multi-user portal](#multi-user-portal-hosted) · [Hosting on Render](#hosting-on-render-public-open-sign-up) · [Brokers](#brokers-at-a-glance) · [Risk checks](#pre-trade-risk-checks) · [Day trading](#day-trading-day-trading-tab) · [Market data](#market-data-yahoo-free-or-alpaca-sip-licensed) · [Real money](#real-money-per-account-live-switch) · [What was tested](#what-was-exercised-and-what-was-only-checked-with-fixtures) · [Known limitations](#known-limitations)
+
+## How it started
+
+A broker-connected research assistant for a US equity swing trader, inspired by HKUST's InvestLM, built around one question:
 
 > **Why did this stock qualify under my rules, what evidence supports that answer, and what happened after I acted on it?**
 
-The trader writes a setup in plain English. Tickmark turns it into explicit, versioned rules, screens a watchlist, shows the evidence behind every pass, fail and unknown result, previews and submits a **paper** order, simulates what happens next, and records everything in a journal that can't be rewritten later.
-
-It has two data modes, switched in the top bar:
-
-- **Live data**: real completed daily bars and earnings dates from Yahoo Finance (via the `yfinance` library, from the finance-market-analysis plugin's yfinance skill). The watchlist is editable. Paper orders fill on **real** next-session opens, stops trigger on real lows, and a **live forward test** records every setup the moment the app sees it and follows it on real prices.
-- **Demo data**: seeded simulated prices with a manual session clock, so the full story can be shown in two minutes regardless of what the market did today.
-
-**Neither mode needs API keys. Execution is paper-only in both.**
+Data modes: **live data** (real completed daily bars and earnings dates from Yahoo Finance, or Alpaca's licensed SIP feed with a key) and **demo data** (seeded simulated prices with a manual session clock, for a two-minute walkthrough). Neither needs API keys. Real money needs a broker connection and that account's own switch.
 
 ## Quick start
 
@@ -303,14 +322,16 @@ Connected apps are listed in the Account tab, where you can disconnect them. The
 
 ## Connections page (sign in to brokers, exchanges and AI)
 
-**Connections** (the plug icon, the Connections tab, or ⌘K → "connect") lists every broker, exchange, wallet and AI option, grouped, with the best way to sign in first:
-- **Sign in with &lt;broker&gt;** (OAuth): Alpaca, Schwab, Tradier and TradeStation. The server operator registers an app with each broker; until then the row says "Needs server setup".
-- **API key**, inline: Alpaca paper, Coinbase, Binance and Binance.US, Kraken, OKX, Bybit, Robinhood Crypto.
-- **Gateway:** IBKR and moomoo/Futu.
-- **Public address:** Phantom.
-- **AI:** copilot plans, and connectors and tokens for AI apps.
+**Connections** (the plug icon in the rail or top bar, or ⌘K → "connect") shows every broker, exchange, wallet and AI option as a tile with its state. Clicking a tile opens that platform's own connect window:
 
-Signing in only lets Tickmark read the account. Real-money trading needs that account's own switch.
+1. **Sign in**, using whatever the platform supports:
+   - **Sign in with &lt;broker&gt;** (OAuth): Alpaca, Schwab, Tradier and TradeStation. The server operator registers an app with each broker; until then it says "Not offered on this server yet".
+   - **API keys**, checked with a read-only call before they're saved: Alpaca paper and live, Coinbase, Binance and Binance.US, Kraken, OKX, Bybit, Robinhood Crypto.
+   - **Gateway:** IBKR and moomoo/Futu. **Public address:** Phantom.
+   - **AI:** copilot plans, your own Claude/OpenAI/Gemini key, a local model, connectors and tokens for AI apps.
+2. **Trade real money**, in the same window once connected: for Alpaca, paste live keys, then type the confirmation phrase; for crypto exchanges, pick the non-testnet account, pass its checks and type the phrase. After that the account can trade live right away; every live order still asks for its ticker.
+
+Keys are stored encrypted for your account only and never sent back to the browser. Escape or a click outside closes the window.
 
 ## Interface
 
@@ -329,7 +350,8 @@ Signing in only lets Tickmark read the account. Real-money trading needs that ac
 - **Look:** a light warm-stone theme by default, after a calm portfolio-dashboard reference: white blocks on a stone canvas, a dark icon rail for the sections, sage green for up and burnt orange for down, Hanken Grotesk for text and IBM Plex Mono for numbers. The account is the one dark block, at the top of the left column: equity, change since start, cash, buying power, open positions. A dark theme with the same palette is one click away (moon icon at the bottom of the rail, or the brain menu). The chart redraws in the new colors.
 - **Installable app (PWA):** open the site in Chrome or Edge and click the install icon in the top bar (or the browser's install button). On iPhone/iPad use Share → Add to Home Screen; in Safari on a Mac, File → Add to Dock. It opens in its own window with the Tickmark icon. On phones the rail becomes a bottom tab bar and the blocks stack. The service worker caches only the app shell (page, scripts, styles, icons); market data, orders and accounts always come from the server and are never stored on the device.
 - **Portfolio (home):** total balance (trading account plus linked accounts' last snapshot), cash, buying power, unrealized and realized P&L, win rate, a graph of total value over time (sampled at most every 15 minutes while the desk is in use; nothing back-filled), allocation bars, and positions with average cost and P&L.
-- **TradingView:** the chart card switches between Tickmark's own chart (completed bars, rule markers, planned stop) and TradingView's live Advanced Chart; a ticker tape of the watchlist runs under the top bar (hidden in focus mode). These are TradingView's official free widgets: prices come from TradingView (for US stocks, Cboe One) and are for viewing; the rules keep using completed daily bars.
+- **Charts and TradingView:** a toolbar above the chart picks the source (**Rules**: Tickmark's chart with rule markers and the planned stop; **TradingView**: TradingView's chart and indicators), the candle size (5m, 15m, 1h, 1D, 1W, 1M) and the range (1M, 3M, 6M, 1Y, 2Y). Weekly and monthly candles are built from the daily bars; intraday candles switch to TradingView. A ticker tape of SPY, QQQ and the watchlist runs under the top bar (hidden in focus mode). These are TradingView's official free widgets: their US stock prices come from Cboe One, 15 minutes delayed, and are for viewing; the rules keep using completed daily bars. TradingView no longer serves index symbols such as `FOREXCOM:SPXUSD` to free widgets, so the tape uses the SPY and QQQ ETFs.
+- **Installed app updates:** the service worker always loads the server's current page and keeps a copy only for offline use, so a new deploy never leaves an installed app on a stale page.
 - **Connections:** every broker, exchange and AI is a tile that opens its own connect window: its sign-in methods (OAuth, API keys, gateway), the key check, and then **Trade real money** in the same window. Real money still needs the account's confirmation phrase typed once, and every live order still asks for its ticker.
 - **AI strategy research:** top of the Strategy tab. Describe a goal; the copilot model reads the strategy library, your watchlist, indicators and the forward test, explains its choice and drafts a rule set. "Use these rules" saves it as a new version that screens the live watchlist. Checked 2026-11-23 with Gemma 4 E2B: it drafted an EMA-pullback rule set in about 90 seconds. Snapshot-mode models can't draft.
 - **Smoothness:** contained scrolling in each panel, press feedback on buttons and tiles, spring-animated popups, no tap delay on phones.
