@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import hmac
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import github_login
 from . import alerts, events, market_data, oauth, streaming, backtest, broker_sync, credentials, db, demo_data, documents, explain, live_data, live_gate, risk, scheduler, trading
 from .brokers import factory, ibkr, registry
 from . import day as day_mod
@@ -137,7 +139,11 @@ def _me(request: Request) -> dict:
     return getattr(request.state, "user", None) or {"id": portal.LOCAL_USER, "role": "admin", "email": None}
 
 
-def _cookie(resp: JSONResponse, request: Request, token: str | None, remember: bool = True) -> JSONResponse:
+def _public_base(request: Request) -> str:
+    return (os.environ.get("RENDER_EXTERNAL_URL") or str(request.base_url)).rstrip("/")
+
+
+def _cookie(resp, request: Request, token: str | None, remember: bool = True):
     """remember=True keeps the browser signed in for 30 days; False sets a cookie that ends when the browser closes."""
     secure = request.url.scheme == "https" or os.environ.get("SWINGDESK_SECURE_COOKIES", "off") == "on"
     if token:
@@ -206,8 +212,10 @@ def auth_status(request: Request):
     if not portal.enabled():
         return {"portal": False, "user": None}
     user = portal.user_for_session(request.cookies.get(portal.SESSION_COOKIE))
-    first = portal.real_user_count() == 0
-    return {"portal": True, "user": user, "first_user": first, "guest": bool(user and user["role"] == "guest"), "setup_code_required": first and bool(os.environ.get("SWINGDESK_SETUP_CODE")),
+    setup = bool(os.environ.get("SWINGDESK_SETUP_CODE", "").strip())
+    first = portal.real_user_count() == 0 and not setup      # "the first account becomes admin" only without a setup code
+    return {"portal": True, "user": user, "first_user": first, "guest": bool(user and user["role"] == "guest"),
+            "admin_unclaimed": setup and portal.admin_unclaimed(), "github_login": github_login.configured(),
             "open_signup": os.environ.get("SWINGDESK_OPEN_SIGNUP", "off").lower() in ("on", "1", "true")}
 
 
@@ -247,6 +255,57 @@ def auth_guest(request: Request):
     token, u = portal.create_guest(request.client.host if request.client else "")
     _start_live(u["id"])
     return _cookie(JSONResponse({"user": u}), request, token, True)
+
+
+@app.get("/api/auth/github/start")
+def auth_github_start(request: Request, remember: int = 1):
+    """Sign in (or link) with GitHub: off to GitHub's consent page; it comes back to /api/auth/github/callback."""
+    if not portal.enabled():
+        raise HTTPException(404, "The multi-user portal is off.")
+    if not github_login.configured():
+        raise HTTPException(409, "Sign in with GitHub isn't set up on this server yet.")
+    url, state = github_login.authorize_url(_public_base(request))
+    resp = RedirectResponse(url, status_code=302)
+    secure = request.url.scheme == "https" or os.environ.get("SWINGDESK_SECURE_COOKIES", "off") == "on"
+    resp.set_cookie("sd_gh_state", f"{state}.{1 if remember else 0}", max_age=600, httponly=True, samesite="lax", secure=secure, path="/api/auth/github")
+    return resp
+
+
+@app.get("/api/auth/github/callback")
+def auth_github_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    from urllib.parse import quote
+    raw = request.cookies.get("sd_gh_state") or ""
+    want, _, rem = raw.partition(".")
+
+    def fail(msg: str):
+        return RedirectResponse(f"/?auth_error={quote(msg)}", status_code=302)
+    if error:
+        return fail("GitHub sign-in was cancelled.")
+    if not want or not hmac.compare_digest(want, state or ""):
+        return fail("The GitHub sign-in expired or came from somewhere else. Try again.")
+    try:
+        gh = github_login.fetch_user(code, _public_base(request))
+        current = portal.user_for_session(request.cookies.get(portal.SESSION_COOKIE))
+        u = portal.github_account(gh["id"], gh["email"], gh["name"], current)
+    except (github_login.GitHubError, portal.PortalError) as exc:
+        return fail(str(exc))
+    if u.pop("new", False) and not (current and current.get("role") == "guest"):
+        _start_live(u["id"])
+    token, u = portal.issue_session(u["id"], remember=rem != "0")
+    from . import backup
+    backup.BACKUP.request()
+    resp = _cookie(RedirectResponse("/?signed_in=github", status_code=302), request, token, rem != "0")
+    resp.delete_cookie("sd_gh_state", path="/api/auth/github")
+    return resp
+
+
+class ClaimIn(BaseModel):
+    code: str
+
+
+@app.post("/api/portal/claim-admin")
+def portal_claim_admin(body: ClaimIn, request: Request):
+    return {"user": portal.claim_admin(_me(request), body.code)}
 
 
 @app.post("/api/auth/logout")

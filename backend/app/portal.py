@@ -72,6 +72,10 @@ def conn() -> sqlite3.Connection:
     CREATE TABLE IF NOT EXISTS mcp_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE,
       prefix TEXT NOT NULL, created_at TEXT NOT NULL, last_used_at TEXT, revoked_at TEXT);
     """)
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN github_id TEXT")      # "Sign in with GitHub" (numeric GitHub user id)
+    except sqlite3.OperationalError:
+        pass
     return c
 
 
@@ -137,7 +141,9 @@ def for_each_tenant(fn) -> list:
 # ---------- accounts ----------
 
 def _public(u) -> dict:
-    return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"], "created_at": u["created_at"]}
+    keys = u.keys() if hasattr(u, "keys") else []
+    return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"], "created_at": u["created_at"],
+            "github": bool(u["github_id"]) if "github_id" in keys else False}
 
 
 def real_user_count(c=None) -> int:
@@ -210,10 +216,9 @@ def signup(email: str, password: str, name: str = "", invite: str = "", guest_id
     try:
         c.execute("BEGIN IMMEDIATE")
         first = real_user_count(c) == 0
-        setup = os.environ.get("SWINGDESK_SETUP_CODE", "").strip()
-        if first and setup and not hmac.compare_digest((invite or "").strip(), setup):
-            c.execute("ROLLBACK")      # on a public server, only the operator (who can read the setup code) becomes admin
-            raise PortalError("Enter the setup code from the server's settings to create the administrator account.", 403)
+        # Sign-up never asks for the setup code. With a setup code configured (a public server), everyone signs up as a user and
+        # the operator claims admin later with the code (claim_admin); without one (the app on your own computer), the first account is admin.
+        auto_admin = first and not os.environ.get("SWINGDESK_SETUP_CODE", "").strip()
         inv = None
         if not first and os.environ.get("SWINGDESK_OPEN_SIGNUP", "off").lower() not in ("on", "1", "true"):
             inv = c.execute("SELECT * FROM invites WHERE code_hash=? AND used_by IS NULL", (_h((invite or "").strip()),)).fetchone()
@@ -230,12 +235,12 @@ def signup(email: str, password: str, name: str = "", invite: str = "", guest_id
         if g:   # the guest becomes a real account and keeps its desk (paper trades, watchlist, journal)
             uid = g["id"]
             c.execute("UPDATE users SET email=?, pw_hash=?, role=?, name=? WHERE id=?",
-                      (email, hash_password(password), "admin" if first else "user", name.strip()[:80] or None, uid))
+                      (email, hash_password(password), "admin" if auto_admin else "user", name.strip()[:80] or None, uid))
             c.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
         else:
             uid = "u_" + uuid.uuid4().hex[:16]
             c.execute("INSERT INTO users(id,email,pw_hash,role,name,created_at) VALUES(?,?,?,?,?,?)",
-                      (uid, email, hash_password(password), "admin" if first else "user", name.strip()[:80] or None, _now()))
+                      (uid, email, hash_password(password), "admin" if auto_admin else "user", name.strip()[:80] or None, _now()))
         if inv:
             c.execute("UPDATE invites SET used_by=?, used_at=? WHERE code_hash=?", (uid, _now(), inv["code_hash"]))
         c.execute("COMMIT")
@@ -273,6 +278,78 @@ def login(email: str, password: str, ip: str = "", remember: bool = True) -> tup
         exp = (datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS if remember else SHORT_SESSION_DAYS)).isoformat(timespec="seconds")
         c.execute("INSERT INTO sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)", (_h(token), u["id"], _now(), exp))
         return token, _public(u)
+    finally:
+        c.close()
+
+
+def admin_unclaimed() -> bool:
+    c = conn()
+    try:
+        return c.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0] == 0
+    finally:
+        c.close()
+
+
+def claim_admin(user: dict, code: str) -> dict:
+    """Become the administrator with the server's setup code. Only while no administrator exists."""
+    setup = os.environ.get("SWINGDESK_SETUP_CODE", "").strip()
+    key = f"admin:{user['id']}"
+    if _throttled(key):
+        raise PortalError("Too many wrong codes. Try again in 15 minutes.", 429)
+    if user.get("role") == "guest":
+        raise PortalError("Create an account first, then claim admin.", 403)
+    if not admin_unclaimed():
+        raise PortalError("This server already has an administrator.", 409)
+    if not setup or not hmac.compare_digest((code or "").strip(), setup):
+        _failed(key)
+        raise PortalError("That isn't the setup code. It's in the server's settings (Render → Environment → SWINGDESK_SETUP_CODE).", 403)
+    c = conn()
+    try:
+        c.execute("UPDATE users SET role='admin' WHERE id=?", (user["id"],))
+        return _public(c.execute("SELECT * FROM users WHERE id=?", (user["id"],)).fetchone())
+    finally:
+        c.close()
+
+
+def github_account(gh_id: str, email: str | None, name: str | None, current: dict | None) -> dict:
+    """The account a GitHub sign-in belongs to: already linked; or the signed-in user linking it; or the account with the same verified
+    email; or a new one (a guest's desk becomes it). Returns the user."""
+    c = conn()
+    try:
+        c.execute("BEGIN IMMEDIATE")
+        u = c.execute("SELECT * FROM users WHERE github_id=? AND disabled=0", (gh_id,)).fetchone()
+        if u:
+            c.execute("COMMIT")
+            return _public(u)
+        if current and current.get("role") != "guest":              # linking GitHub to the signed-in account
+            c.execute("UPDATE users SET github_id=NULL WHERE github_id=?", (gh_id,))
+            c.execute("UPDATE users SET github_id=? WHERE id=?", (gh_id, current["id"]))
+            c.execute("COMMIT")
+            return _public(c.execute("SELECT * FROM users WHERE id=?", (current["id"],)).fetchone())
+        if email:
+            u = c.execute("SELECT * FROM users WHERE email=? AND role!='guest' AND disabled=0", (email.lower(),)).fetchone()
+            if u:
+                c.execute("UPDATE users SET github_id=? WHERE id=?", (gh_id, u["id"]))
+                c.execute("COMMIT")
+                return _public(u)
+        first = real_user_count(c) == 0
+        if not first and os.environ.get("SWINGDESK_OPEN_SIGNUP", "off").lower() not in ("on", "1", "true"):
+            c.execute("ROLLBACK")
+            raise PortalError("Sign-up is by invitation on this server; create the account with your invite code first, then link GitHub.", 403)
+        role = "admin" if first and not os.environ.get("SWINGDESK_SETUP_CODE", "").strip() else "user"
+        em = (email or f"github-{gh_id}@users.noreply.github.com").lower()
+        if c.execute("SELECT 1 FROM users WHERE email=?", (em,)).fetchone():
+            em = f"github-{gh_id}@users.noreply.github.com"
+        if current and current.get("role") == "guest":
+            uid = current["id"]
+            c.execute("UPDATE users SET email=?, pw_hash='!', role=?, name=?, github_id=? WHERE id=?", (em, role, (name or "")[:80] or None, gh_id, uid))
+            c.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
+        else:
+            uid = "u_" + uuid.uuid4().hex[:16]
+            c.execute("INSERT INTO users(id,email,pw_hash,role,name,created_at,github_id) VALUES(?,?,?,?,?,?,?)",
+                      (uid, em, "!", role, (name or "")[:80] or None, _now(), gh_id))
+        c.execute("COMMIT")
+        return _public(c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()) | {"new": True}
     finally:
         c.close()
 

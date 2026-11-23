@@ -14,6 +14,10 @@ services:
         value: "on"
       - key: SWINGDESK_OPEN_SIGNUP     # open to the public: anyone can create an account (the first admin still needs the setup code)
         value: "on"
+      - key: SWINGDESK_GITHUB_CLIENT_ID      # "Sign in with GitHub": a GitHub OAuth app's client id and secret
+        sync: false
+      - key: SWINGDESK_GITHUB_CLIENT_SECRET
+        sync: false
       - key: SWINGDESK_BACKUP_REPO     # owner/name of a PRIVATE GitHub repo that holds the encrypted data backup
         sync: false
       - key: SWINGDESK_BACKUP_TOKEN    # fine-grained GitHub token: Contents read/write on that one repo only

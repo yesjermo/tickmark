@@ -39,7 +39,8 @@ export interface Screen {
 }
 
 export default function App() {
-  const [auth, setAuth] = useState<{ portal: boolean; user: PortalUser | null; guest?: boolean; first_user?: boolean; open_signup?: boolean; setup_code_required?: boolean } | null>(null);
+  const [auth, setAuth] = useState<{ portal: boolean; user: PortalUser | null; guest?: boolean; first_user?: boolean; open_signup?: boolean;
+    admin_unclaimed?: boolean; github_login?: boolean } | null>(null);
   const [authBox, setAuthBox] = useState<"in" | "up" | null>(null);
   // Like any website: visitors land on the desk as a guest (real prices, paper trades kept on this browser), and sign in when they want.
   const inflight = useRef<Promise<void> | null>(null);
@@ -52,6 +53,9 @@ export default function App() {
     setAuth(a);
   }).catch(() => setAuth({ portal: false, user: null })).finally(() => { inflight.current = null; }));
   useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const msg = q.get("auth_error") ?? (q.get("signed_in") === "github" ? "Signed in with GitHub." : null);
+    if (msg) { setTimeout(() => (q.get("auth_error") ? sonner.error : sonner)(msg, { duration: 8000 }), 600); history.replaceState(null, "", location.pathname); }
     load();
     const out = () => { load(); };
     const up = () => setAuthBox("up");
@@ -60,20 +64,21 @@ export default function App() {
     return () => { window.removeEventListener("swingdesk:signin", out); window.removeEventListener("swingdesk:signup", up); };
   }, []);
   if (!auth) return <div className="pad muted">Loading…</div>;
-  if (auth.portal && !auth.user) return <Login firstUser={!!auth.first_user} openSignup={!!auth.open_signup} setupCode={!!auth.setup_code_required}
+  if (auth.portal && !auth.user) return <Login firstUser={!!auth.first_user} openSignup={!!auth.open_signup} githubLogin={!!auth.github_login}
     onIn={(u) => setAuth({ ...auth, user: u, first_user: false })} />;
   return (
     <>
-      <Desk user={auth.portal ? auth.user : null} key={`${auth.user?.id ?? "local"}:${auth.user?.role}`} guest={!!auth.guest} openAuth={setAuthBox} />
+      <Desk adminUnclaimed={!!auth.admin_unclaimed} githubLogin={!!auth.github_login} user={auth.portal ? auth.user : null} key={`${auth.user?.id ?? "local"}:${auth.user?.role}`} guest={!!auth.guest} openAuth={setAuthBox} />
       <AnimatePresence>
-        {authBox && <Login key="auth" firstUser={false} openSignup={!!auth.open_signup} start={authBox} guest={!!auth.guest}
+        {authBox && <Login key="auth" firstUser={false} openSignup={!!auth.open_signup} githubLogin={!!auth.github_login} start={authBox} guest={!!auth.guest}
           onClose={() => setAuthBox(null)} onIn={() => { setAuthBox(null); load(); }} />}
       </AnimatePresence>
     </>
   );
 }
 
-function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; guest?: boolean; openAuth: (m: "in" | "up") => void }) {
+function Desk({ user, guest = false, openAuth, adminUnclaimed = false, githubLogin = false }: { user: PortalUser | null; guest?: boolean;
+  openAuth: (m: "in" | "up") => void; adminUnclaimed?: boolean; githubLogin?: boolean }) {
   const [status, setStatus] = useState<Status_ | null>(null);
   const [screen, setScreen] = useState<Screen | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -312,7 +317,7 @@ function Desk({ user, guest = false, openAuth }: { user: PortalUser | null; gues
             {side === "orders" && <OrdersPanel orders={orders} onChanged={refresh} notify={setToast} />}
             {side === "broker" && <BrokerPanel onChanged={refresh} notify={setToast} />}
             {side === "risk" && <RiskPanel onChanged={refresh} notify={setToast} />}
-            {side === "account" && <AccountPanel user={user} notify={setToast} />}
+            {side === "account" && <AccountPanel user={user} notify={setToast} adminUnclaimed={adminUnclaimed} githubLogin={githubLogin} />}
             </motion.div>
           </AnimatePresence>
         </aside>

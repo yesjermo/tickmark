@@ -1,4 +1,4 @@
-import { Mark } from "./Mark";
+import { GitHubMark, Mark } from "./Mark";
 import { useRef, useState } from "react";
 import { useDialog } from "./theme";
 const noop = () => {};
@@ -6,10 +6,10 @@ import { motion } from "motion/react";
 import { X } from "lucide-react";
 import { api, ApiError } from "../api";
 
-export interface PortalUser { id: string; email: string; name: string | null; role: string }
+export interface PortalUser { id: string; email: string; name: string | null; role: string; github?: boolean }
 
-export function Login({ firstUser, openSignup, setupCode = false, onIn, start = "in", guest = false, onClose }: {
-  firstUser: boolean; openSignup: boolean; setupCode?: boolean; onIn: (u: PortalUser) => void;
+export function Login({ firstUser, openSignup, githubLogin = false, onIn, start = "in", guest = false, onClose }: {
+  firstUser: boolean; openSignup: boolean; githubLogin?: boolean; onIn: (u: PortalUser) => void;
   start?: "in" | "up"; guest?: boolean; onClose?: () => void;
 }) {
   const [mode, setMode] = useState<"in" | "up">(firstUser ? "up" : start);
@@ -36,12 +36,16 @@ export function Login({ firstUser, openSignup, setupCode = false, onIn, start = 
         <p className="muted small">{firstUser ? "Create the administrator account for this Tickmark server." :
           mode === "in" ? "Sign in to your desk." : guest ? "Create a free account. Your guest paper trades, watchlist and journal come with you."
           : openSignup ? "Create your account." : "Create your account with the invite code you were sent."}</p>
+        {githubLogin && <>
+          <a className="btn gh-btn" href={`/api/auth/github/start?remember=${remember ? 1 : 0}`}><GitHubMark size={16} /> Continue with GitHub</a>
+          <div className="or-sep" aria-hidden><span>or with email</span></div>
+        </>}
         <label>Email <input type="email" autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></label>
         <label>Password <input type="password" autoComplete={mode === "in" ? "current-password" : "new-password"} value={f.password}
           onChange={(e) => setF({ ...f, password: e.target.value })} /></label>
         {mode === "up" && <>
           <label>Name (optional) <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-          {((!firstUser && !openSignup) || (firstUser && setupCode)) && <label>{firstUser ? "Setup code (from the server's settings)" : "Invite code"}
+          {!firstUser && !openSignup && <label>Invite code
             <input value={f.invite} autoComplete="off" onChange={(e) => setF({ ...f, invite: e.target.value })} /></label>}
           <p className="small muted">At least 10 characters. Your broker and exchange keys are stored encrypted, separately from every other user.</p>
         </>}

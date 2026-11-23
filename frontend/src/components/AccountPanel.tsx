@@ -2,10 +2,20 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { PortalUser } from "./Login";
 import { AdminAI } from "./AdminAI";
+import { GitHubMark } from "./Mark";
+import { Monogram } from "./ConnectPortal";
+import { openTradingViewSignIn } from "./TradingView";
+import { Check } from "lucide-react";
 
 interface Tok { id: string; name: string; prefix: string; created_at: string; last_used_at: string | null; revoked_at: string | null }
 
-export function AccountPanel({ user, notify }: { user: PortalUser | null; notify: (s: string) => void }) {
+export function AccountPanel({ user, notify, adminUnclaimed = false, githubLogin = false }: { user: PortalUser | null; notify: (s: string) => void;
+  adminUnclaimed?: boolean; githubLogin?: boolean }) {
+  const [code, setCode] = useState("");
+  async function claim() {
+    try { await api.post("/api/portal/claim-admin", { code }); notify("You're the administrator now."); setTimeout(() => location.reload(), 900); }
+    catch (e) { notify((e as ApiError).message); }
+  }
   const [toks, setToks] = useState<{ tokens: Tok[]; endpoint: string; tools: string[] } | null>(null);
   const [name, setName] = useState("Claude Code");
   const [fresh, setFresh] = useState<string | null>(null);
@@ -28,6 +38,31 @@ export function AccountPanel({ user, notify }: { user: PortalUser | null; notify
           <h3>Account</h3>
           <p className="small">{user.email} · {user.role}</p>
           <button className="btn small" onClick={async () => { await api.post("/api/auth/logout"); location.reload(); }}>Sign out</button>
+        </section>
+      )}
+      {user && user.role !== "guest" && (
+        <section>
+          <h3>Connected sign-ins</h3>
+          <div className="signin-row">
+            <GitHubMark size={18} />
+            <span className="grow"><b>GitHub</b><small>{user.github ? "Linked: you can sign in with GitHub." : githubLogin ? "Sign in with GitHub next time." : "Not set up on this server yet."}</small></span>
+            {githubLogin && !user.github && <a className="btn small" href="/api/auth/github/start?remember=1">Link GitHub</a>}
+            {user.github && <span className="conn-pill st-connected"><Check size={12} aria-hidden /> Linked</span>}
+          </div>
+          <div className="signin-row">
+            <Monogram name="Trading View" />
+            <span className="grow"><b>TradingView</b><small>Sign in on TradingView's own page, then open your charts and layouts from the desk.</small></span>
+            <button className="btn small" onClick={openTradingViewSignIn}>Sign in</button>
+          </div>
+        </section>
+      )}
+      {user && user.role === "user" && adminUnclaimed && (
+        <section>
+          <h3>Become administrator</h3>
+          <p className="small muted">This server has no administrator yet. The owner enters the setup code from the server's settings
+            (Render → Environment → SWINGDESK_SETUP_CODE) once; signing up never needs it.</p>
+          <div className="row"><input type="password" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} aria-label="Setup code" placeholder="Setup code" />
+            <button className="btn small primary" disabled={!code.trim()} onClick={claim}>Claim</button></div>
         </section>
       )}
       <section>

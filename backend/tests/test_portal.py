@@ -29,7 +29,7 @@ def test_signin_required_and_first_user_is_admin(P):
     a = P()
     assert a.get("/api/watchlist/screen").status_code == 401
     assert a.get("/api/auth/status").json() == {"portal": True, "user": None, "first_user": True, "guest": False, "open_signup": False,
-                                                "setup_code_required": False}
+                                                "admin_unclaimed": False, "github_login": False}
     u = signup(a, "Owner@Example.com")
     assert u["role"] == "admin" and u["email"] == "owner@example.com"
     assert a.get("/api/auth/status").json()["user"]["id"] == u["id"]
@@ -135,16 +135,64 @@ def test_mcp_in_single_user_app(client):
     assert rpc(client, tok, "bogus/method").json()["error"]["code"] == -32601
 
 
-def test_setup_code_guards_the_first_admin_and_health_is_public(P, monkeypatch):
+def test_signup_needs_no_setup_code_and_admin_is_claimed_with_it(P, monkeypatch):
     monkeypatch.setenv("SWINGDESK_SETUP_CODE", "setup-abc-123")
+    monkeypatch.setenv("SWINGDESK_OPEN_SIGNUP", "on")
     a = P()
     assert a.get("/healthz").json() == {"ok": True}
-    assert a.get("/api/auth/status").json()["setup_code_required"] is True
-    r = a.post("/api/auth/signup", json={"email": "stranger@example.com", "password": "correct horse battery"})
-    assert r.status_code == 403 and "setup code" in r.json()["detail"]
-    r = a.post("/api/auth/signup", json={"email": "owner@example.com", "password": "correct horse battery", "invite": "setup-abc-123"})
+    st = a.get("/api/auth/status").json()
+    assert st["first_user"] is False and st["admin_unclaimed"] is True          # guests can come in; nobody is admin yet
+    r = a.post("/api/auth/signup", json={"email": "owner@example.com", "password": "correct horse battery"})
+    assert r.status_code == 200 and r.json()["user"]["role"] == "user"           # no code asked; a plain account
+    assert a.get("/api/admin/ai").status_code == 403
+    assert a.post("/api/portal/claim-admin", json={"code": "wrong"}).status_code == 403
+    r = a.post("/api/portal/claim-admin", json={"code": "setup-abc-123"})
     assert r.status_code == 200 and r.json()["user"]["role"] == "admin"
-    assert a.get("/api/auth/status").json()["setup_code_required"] is False
+    assert a.get("/api/auth/status").json()["admin_unclaimed"] is False
+    b = P()
+    signup(b, "second@example.com")
+    assert b.post("/api/portal/claim-admin", json={"code": "setup-abc-123"}).status_code == 409   # only while nobody is admin
+    g = P()
+    g.post("/api/auth/guest")
+    assert g.post("/api/portal/claim-admin", json={"code": "setup-abc-123"}).status_code == 403
+
+
+def test_sign_in_with_github_creates_links_and_keeps_a_guest_desk(P, monkeypatch):
+    import httpx
+    from app import github_login
+    monkeypatch.setenv("SWINGDESK_GITHUB_CLIENT_ID", "cid")
+    monkeypatch.setenv("SWINGDESK_GITHUB_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("SWINGDESK_OPEN_SIGNUP", "on")
+    who = {"id": 4242, "login": "octo", "name": "Octo Cat", "email": "octo@example.com"}
+
+    def gh(req):
+        if req.url.path == "/login/oauth/access_token":
+            return httpx.Response(200, json={"access_token": "gho_x"} if b"code=good" in req.content else {"error": "bad"})
+        if req.url.path == "/user":
+            return httpx.Response(200, json={"id": who["id"], "login": who["login"], "name": who["name"]})
+        if req.url.path == "/user/emails":
+            return httpx.Response(200, json=[{"email": who["email"], "primary": True, "verified": True}])
+        return httpx.Response(404)
+    monkeypatch.setattr(github_login, "TRANSPORT", httpx.MockTransport(gh))
+    owner = P()
+    signup(owner, "owner@example.com")
+    g = P()
+    me = g.post("/api/auth/guest").json()["user"]
+    assert g.get("/api/auth/status").json()["github_login"] is True
+    start = g.get("/api/auth/github/start", follow_redirects=False)
+    assert start.status_code == 302 and start.headers["location"].startswith("https://github.com/login/oauth/authorize?client_id=cid")
+    state = start.headers["location"].split("state=")[1].split("&")[0]
+    bad = g.get(f"/api/auth/github/callback?code=good&state=forged", follow_redirects=False)
+    assert "auth_error" in bad.headers["location"]
+    ok = g.get(f"/api/auth/github/callback?code=good&state={state}", follow_redirects=False)
+    assert ok.status_code == 302 and ok.headers["location"] == "/?signed_in=github"
+    u = g.get("/api/auth/status").json()["user"]
+    assert u["id"] == me["id"] and u["role"] == "user" and u["email"] == "octo@example.com" and u["github"] is True   # the guest desk is kept
+    again = P()                                                                    # a later GitHub sign-in finds the same account
+    st = again.get("/api/auth/github/start", follow_redirects=False).headers["location"].split("state=")[1].split("&")[0]
+    again.get(f"/api/auth/github/callback?code=good&state={st}", follow_redirects=False)
+    assert again.get("/api/auth/status").json()["user"]["id"] == me["id"]
+    assert g.post("/api/auth/login", json={"email": "octo@example.com", "password": "!"}).status_code == 401   # no password account
 
 
 def test_any_master_secret_works_and_public_url_is_used(P, monkeypatch):
