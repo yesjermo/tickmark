@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+httpx
+anthropic
+yfinance
+keyring
+websockets
+pytest
+ccxt
+# optional: futu-api or moomoo-api for moomoo/Futu OpenD (linked accounts)
