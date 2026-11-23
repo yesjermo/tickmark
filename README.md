@@ -1,5 +1,7 @@
 # SwingDesk
 
+**Project page:** https://yesjermo.github.io/tickmark-site/ (this repository, `tickmark`, is private; the page is published from the public `tickmark-site` repo).
+
 A working prototype of a broker-connected research and paper-trading assistant for a US equity swing trader, inspired by HKUST's InvestLM. It answers one question end to end:
 
 > **Why did this stock qualify under my rules, what evidence supports that answer, and what happened after I acted on it?**
