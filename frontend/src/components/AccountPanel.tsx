@@ -2,15 +2,16 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { PortalUser } from "./Login";
 import { AdminAI } from "./AdminAI";
-import { GitHubMark } from "./Mark";
+import { GitHubMark, GoogleMark } from "./Mark";
 import { Monogram } from "./ConnectPortal";
 import { openTradingViewSignIn } from "./TradingView";
 import { Check } from "lucide-react";
 
 interface Tok { id: string; name: string; prefix: string; created_at: string; last_used_at: string | null; revoked_at: string | null }
 
-export function AccountPanel({ user, notify, adminUnclaimed = false, githubLogin = false }: { user: PortalUser | null; notify: (s: string) => void;
-  adminUnclaimed?: boolean; githubLogin?: boolean }) {
+export function AccountPanel({ user, notify, adminUnclaimed = false, social = [] }: { user: PortalUser | null; notify: (s: string) => void;
+  adminUnclaimed?: boolean; social?: string[] }) {
+  const githubLogin = social.includes("github"), googleLogin = social.includes("google");
   const [code, setCode] = useState("");
   async function claim() {
     try { await api.post("/api/portal/claim-admin", { code }); notify("You're the administrator now."); setTimeout(() => location.reload(), 900); }
@@ -48,6 +49,12 @@ export function AccountPanel({ user, notify, adminUnclaimed = false, githubLogin
             <span className="grow"><b>GitHub</b><small>{user.github ? "Linked: you can sign in with GitHub." : githubLogin ? "Sign in with GitHub next time." : "Not set up on this server yet."}</small></span>
             {githubLogin && !user.github && <a className="btn small" href="/api/auth/github/start?remember=1">Link GitHub</a>}
             {user.github && <span className="conn-pill st-connected"><Check size={12} aria-hidden /> Linked</span>}
+          </div>
+          <div className="signin-row">
+            <GoogleMark size={18} />
+            <span className="grow"><b>Google</b><small>{user.google ? "Linked: you can sign in with Google." : googleLogin ? "Sign in with Google next time." : "Not set up on this server yet."}</small></span>
+            {googleLogin && !user.google && <a className="btn small" href="/api/auth/google/start?remember=1">Link Google</a>}
+            {user.google && <span className="conn-pill st-connected"><Check size={12} aria-hidden /> Linked</span>}
           </div>
           <div className="signin-row">
             <Monogram name="Trading View" />

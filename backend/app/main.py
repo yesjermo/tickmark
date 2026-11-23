@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import github_login
+from . import social_login
 from . import alerts, events, market_data, oauth, streaming, backtest, broker_sync, credentials, db, demo_data, documents, explain, live_data, live_gate, risk, scheduler, trading
 from .brokers import factory, ibkr, registry
 from . import day as day_mod
@@ -140,7 +140,8 @@ def _me(request: Request) -> dict:
 
 
 def _public_base(request: Request) -> str:
-    return (os.environ.get("RENDER_EXTERNAL_URL") or str(request.base_url)).rstrip("/")
+    # The public https address: SWINGDESK_PUBLIC_URL on any host (Render also sets RENDER_EXTERNAL_URL), else what the proxy reports.
+    return (os.environ.get("SWINGDESK_PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or str(request.base_url)).rstrip("/")
 
 
 def _cookie(resp, request: Request, token: str | None, remember: bool = True):
@@ -215,7 +216,8 @@ def auth_status(request: Request):
     setup = bool(os.environ.get("SWINGDESK_SETUP_CODE", "").strip())
     first = portal.real_user_count() == 0 and not setup      # "the first account becomes admin" only without a setup code
     return {"portal": True, "user": user, "first_user": first, "guest": bool(user and user["role"] == "guest"),
-            "admin_unclaimed": setup and portal.admin_unclaimed(), "github_login": github_login.configured(),
+            "admin_unclaimed": setup and portal.admin_unclaimed(), "github_login": social_login.configured("github"),
+            "social": social_login.available(),
             "open_signup": os.environ.get("SWINGDESK_OPEN_SIGNUP", "off").lower() in ("on", "1", "true")}
 
 
@@ -257,45 +259,51 @@ def auth_guest(request: Request):
     return _cookie(JSONResponse({"user": u}), request, token, True)
 
 
-@app.get("/api/auth/github/start")
-def auth_github_start(request: Request, remember: int = 1):
-    """Sign in (or link) with GitHub: off to GitHub's consent page; it comes back to /api/auth/github/callback."""
+@app.get("/api/auth/{provider}/start")
+def auth_social_start(provider: str, request: Request, remember: int = 1):
+    """Sign in (or link) with GitHub or Google: off to the provider's consent page; it comes back to /api/auth/<provider>/callback."""
+    if provider not in social_login.PROVIDERS:
+        raise HTTPException(404, "Unknown sign-in provider.")
     if not portal.enabled():
         raise HTTPException(404, "The multi-user portal is off.")
-    if not github_login.configured():
-        raise HTTPException(409, "Sign in with GitHub isn't set up on this server yet.")
-    url, state = github_login.authorize_url(_public_base(request))
+    if not social_login.configured(provider):
+        raise HTTPException(409, f"Sign in with {social_login.PROVIDERS[provider]['name']} isn't set up on this server yet.")
+    url, state = social_login.authorize_url(provider, _public_base(request))
     resp = RedirectResponse(url, status_code=302)
     secure = request.url.scheme == "https" or os.environ.get("SWINGDESK_SECURE_COOKIES", "off") == "on"
-    resp.set_cookie("sd_gh_state", f"{state}.{1 if remember else 0}", max_age=600, httponly=True, samesite="lax", secure=secure, path="/api/auth/github")
+    resp.set_cookie("sd_oauth_state", f"{provider}.{state}.{1 if remember else 0}", max_age=600, httponly=True, samesite="lax",
+                    secure=secure, path="/api/auth")
     return resp
 
 
-@app.get("/api/auth/github/callback")
-def auth_github_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+@app.get("/api/auth/{provider}/callback")
+def auth_social_callback(provider: str, request: Request, code: str = "", state: str = "", error: str = ""):
     from urllib.parse import quote
-    raw = request.cookies.get("sd_gh_state") or ""
-    want, _, rem = raw.partition(".")
+    if provider not in social_login.PROVIDERS:
+        raise HTTPException(404, "Unknown sign-in provider.")
+    who = social_login.PROVIDERS[provider]["name"]
+    parts = (request.cookies.get("sd_oauth_state") or "").split(".")
+    p, want, rem = (parts + ["", "", ""])[:3]
 
     def fail(msg: str):
         return RedirectResponse(f"/?auth_error={quote(msg)}", status_code=302)
     if error:
-        return fail("GitHub sign-in was cancelled.")
-    if not want or not hmac.compare_digest(want, state or ""):
-        return fail("The GitHub sign-in expired or came from somewhere else. Try again.")
+        return fail(f"{who} sign-in was cancelled.")
+    if p != provider or not want or not hmac.compare_digest(want, state or ""):
+        return fail(f"The {who} sign-in expired or came from somewhere else. Try again.")
     try:
-        gh = github_login.fetch_user(code, _public_base(request))
+        ext = social_login.fetch_user(provider, code, _public_base(request))
         current = portal.user_for_session(request.cookies.get(portal.SESSION_COOKIE))
-        u = portal.github_account(gh["id"], gh["email"], gh["name"], current)
-    except (github_login.GitHubError, portal.PortalError) as exc:
+        u = portal.social_account(provider, ext["id"], ext["email"], ext["name"], current)
+    except (social_login.LoginError, portal.PortalError) as exc:
         return fail(str(exc))
     if u.pop("new", False) and not (current and current.get("role") == "guest"):
         _start_live(u["id"])
     token, u = portal.issue_session(u["id"], remember=rem != "0")
     from . import backup
     backup.BACKUP.request()
-    resp = _cookie(RedirectResponse("/?signed_in=github", status_code=302), request, token, rem != "0")
-    resp.delete_cookie("sd_gh_state", path="/api/auth/github")
+    resp = _cookie(RedirectResponse(f"/?signed_in={provider}", status_code=302), request, token, rem != "0")
+    resp.delete_cookie("sd_oauth_state", path="/api/auth")
     return resp
 
 
@@ -1363,7 +1371,7 @@ def tv_token(request: Request):
     """A new private webhook URL for TradingView alerts (shown once; replaces the old one)."""
     from . import tradingview
     token = tradingview.create_token()
-    base = (os.environ.get("RENDER_EXTERNAL_URL") or str(request.base_url)).rstrip("/")
+    base = _public_base(request)
     return {"url": f"{base}/hooks/tradingview/{token}", "template": tradingview.TEMPLATE}
 
 

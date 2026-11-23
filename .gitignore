@@ -27,3 +27,4 @@ secrets.enc
 # local tool config (machine-specific paths) and build caches
 .claude/
 *.tsbuildinfo
+!.env.example

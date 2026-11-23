@@ -29,7 +29,7 @@ def test_signin_required_and_first_user_is_admin(P):
     a = P()
     assert a.get("/api/watchlist/screen").status_code == 401
     assert a.get("/api/auth/status").json() == {"portal": True, "user": None, "first_user": True, "guest": False, "open_signup": False,
-                                                "admin_unclaimed": False, "github_login": False}
+                                                "admin_unclaimed": False, "github_login": False, "social": []}
     u = signup(a, "Owner@Example.com")
     assert u["role"] == "admin" and u["email"] == "owner@example.com"
     assert a.get("/api/auth/status").json()["user"]["id"] == u["id"]
@@ -159,7 +159,7 @@ def test_signup_needs_no_setup_code_and_admin_is_claimed_with_it(P, monkeypatch)
 
 def test_sign_in_with_github_creates_links_and_keeps_a_guest_desk(P, monkeypatch):
     import httpx
-    from app import github_login
+    from app import social_login
     monkeypatch.setenv("SWINGDESK_GITHUB_CLIENT_ID", "cid")
     monkeypatch.setenv("SWINGDESK_GITHUB_CLIENT_SECRET", "secret")
     monkeypatch.setenv("SWINGDESK_OPEN_SIGNUP", "on")
@@ -173,7 +173,7 @@ def test_sign_in_with_github_creates_links_and_keeps_a_guest_desk(P, monkeypatch
         if req.url.path == "/user/emails":
             return httpx.Response(200, json=[{"email": who["email"], "primary": True, "verified": True}])
         return httpx.Response(404)
-    monkeypatch.setattr(github_login, "TRANSPORT", httpx.MockTransport(gh))
+    monkeypatch.setattr(social_login, "TRANSPORT", httpx.MockTransport(gh))
     owner = P()
     signup(owner, "owner@example.com")
     g = P()
@@ -270,3 +270,43 @@ def test_signup_still_signs_in_when_the_address_is_throttled(P, monkeypatch):
         c.post("/api/auth/login", json={"email": "owner@example.com", "password": "wrong password!!"})
     r = c.post("/api/auth/signup", json={"email": "new@example.com", "password": "correct horse battery"})
     assert r.status_code == 200 and c.get("/api/auth/status").json()["user"]["email"] == "new@example.com"
+
+
+def test_sign_in_with_google_links_by_verified_email_only(P, monkeypatch):
+    import httpx
+    from app import social_login
+    monkeypatch.setenv("SWINGDESK_GOOGLE_CLIENT_ID", "gid.apps.googleusercontent.com")
+    monkeypatch.setenv("SWINGDESK_GOOGLE_CLIENT_SECRET", "gsecret")
+    monkeypatch.setenv("SWINGDESK_OPEN_SIGNUP", "on")
+    profile = {"sub": "1098", "name": "Gee", "email": "owner@example.com", "email_verified": True}
+
+    def google(req):
+        if req.url.host == "oauth2.googleapis.com":
+            assert b"grant_type=authorization_code" in req.content
+            return httpx.Response(200, json={"access_token": "ya29.x"})
+        if req.url.path == "/v1/userinfo":
+            return httpx.Response(200, json=profile)
+        return httpx.Response(404)
+    monkeypatch.setattr(social_login, "TRANSPORT", httpx.MockTransport(google))
+    owner = P()
+    signup(owner, "owner@example.com")
+    assert owner.get("/api/auth/status").json()["social"] == ["google"]
+
+    def sign_in(c):
+        loc = c.get("/api/auth/google/start", follow_redirects=False).headers["location"]
+        assert loc.startswith("https://accounts.google.com/o/oauth2/v2/auth?client_id=gid") and "scope=openid+email+profile" in loc
+        st = loc.split("state=")[1].split("&")[0]
+        return c.get(f"/api/auth/google/callback?code=c&state={st}", follow_redirects=False)
+    a = P()
+    assert sign_in(a).headers["location"] == "/?signed_in=google"
+    u = a.get("/api/auth/status").json()["user"]
+    assert u["email"] == "owner@example.com" and u["google"] is True                  # verified email: linked to the existing account
+    profile.update({"sub": "2222", "email": "someone@example.com", "email_verified": False})
+    b = P()
+    sign_in(b)
+    nb = b.get("/api/auth/status").json()["user"]
+    assert nb["email"] == "google-2222@users.noreply.tickmark" and nb["id"] != u["id"]  # unverified email is never trusted for linking
+    c = P()
+    loc = c.get("/api/auth/github/start", follow_redirects=False)
+    assert loc.status_code == 409                                                      # GitHub not configured here
+    assert c.get("/api/auth/evil/start", follow_redirects=False).status_code == 404

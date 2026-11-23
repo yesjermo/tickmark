@@ -1024,3 +1024,6 @@ button, a, select, label, [role=button] { touch-action: manipulation; -webkit-ta
 .signin-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
 .signin-row small { display: block; color: var(--muted); font-size: 12px; }
 .signin-row .mono-badge { width: 28px; height: 28px; font-size: 11px; border-radius: 8px; }
+.google-btn { justify-content: center; text-decoration: none; background: #ffffff; border: 1px solid #dadce0; color: #1f1f1f; font-weight: 500; }
+.google-btn:hover:not(:disabled) { background: #f8f9fa; border-color: #c6c9cc; }
+:root[data-theme="dark"] .google-btn { background: #131314; border-color: #8e918f; color: #e3e3e3; }

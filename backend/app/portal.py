@@ -72,10 +72,11 @@ def conn() -> sqlite3.Connection:
     CREATE TABLE IF NOT EXISTS mcp_tokens (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE,
       prefix TEXT NOT NULL, created_at TEXT NOT NULL, last_used_at TEXT, revoked_at TEXT);
     """)
-    try:
-        c.execute("ALTER TABLE users ADD COLUMN github_id TEXT")      # "Sign in with GitHub" (numeric GitHub user id)
-    except sqlite3.OperationalError:
-        pass
+    for col in ("github_id", "google_id"):         # "Sign in with GitHub / Google": the provider's user id
+        try:
+            c.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            pass
     return c
 
 
@@ -143,7 +144,8 @@ def for_each_tenant(fn) -> list:
 def _public(u) -> dict:
     keys = u.keys() if hasattr(u, "keys") else []
     return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"], "created_at": u["created_at"],
-            "github": bool(u["github_id"]) if "github_id" in keys else False}
+            "github": bool(u["github_id"]) if "github_id" in keys else False,
+            "google": bool(u["google_id"]) if "google_id" in keys else False}
 
 
 def real_user_count(c=None) -> int:
@@ -311,42 +313,46 @@ def claim_admin(user: dict, code: str) -> dict:
         c.close()
 
 
-def github_account(gh_id: str, email: str | None, name: str | None, current: dict | None) -> dict:
-    """The account a GitHub sign-in belongs to: already linked; or the signed-in user linking it; or the account with the same verified
+SOCIAL_COLUMNS = {"github": "github_id", "google": "google_id"}
+
+
+def social_account(provider: str, gh_id: str, email: str | None, name: str | None, current: dict | None) -> dict:
+    """The account a GitHub/Google sign-in belongs to: already linked; or the signed-in user linking it; or the account with the same verified
     email; or a new one (a guest's desk becomes it). Returns the user."""
+    col = SOCIAL_COLUMNS[provider]          # a fixed column name from this table, never user input
     c = conn()
     try:
         c.execute("BEGIN IMMEDIATE")
-        u = c.execute("SELECT * FROM users WHERE github_id=? AND disabled=0", (gh_id,)).fetchone()
+        u = c.execute(f"SELECT * FROM users WHERE {col}=? AND disabled=0", (gh_id,)).fetchone()
         if u:
             c.execute("COMMIT")
             return _public(u)
         if current and current.get("role") != "guest":              # linking GitHub to the signed-in account
-            c.execute("UPDATE users SET github_id=NULL WHERE github_id=?", (gh_id,))
-            c.execute("UPDATE users SET github_id=? WHERE id=?", (gh_id, current["id"]))
+            c.execute(f"UPDATE users SET {col}=NULL WHERE {col}=?", (gh_id,))
+            c.execute(f"UPDATE users SET {col}=? WHERE id=?", (gh_id, current["id"]))
             c.execute("COMMIT")
             return _public(c.execute("SELECT * FROM users WHERE id=?", (current["id"],)).fetchone())
         if email:
             u = c.execute("SELECT * FROM users WHERE email=? AND role!='guest' AND disabled=0", (email.lower(),)).fetchone()
             if u:
-                c.execute("UPDATE users SET github_id=? WHERE id=?", (gh_id, u["id"]))
+                c.execute(f"UPDATE users SET {col}=? WHERE id=?", (gh_id, u["id"]))
                 c.execute("COMMIT")
                 return _public(u)
         first = real_user_count(c) == 0
         if not first and os.environ.get("SWINGDESK_OPEN_SIGNUP", "off").lower() not in ("on", "1", "true"):
             c.execute("ROLLBACK")
-            raise PortalError("Sign-up is by invitation on this server; create the account with your invite code first, then link GitHub.", 403)
+            raise PortalError("Sign-up is by invitation on this server; create the account with your invite code first, then link it in Account.", 403)
         role = "admin" if first and not os.environ.get("SWINGDESK_SETUP_CODE", "").strip() else "user"
-        em = (email or f"github-{gh_id}@users.noreply.github.com").lower()
+        em = (email or f"{provider}-{gh_id}@users.noreply.tickmark").lower()
         if c.execute("SELECT 1 FROM users WHERE email=?", (em,)).fetchone():
-            em = f"github-{gh_id}@users.noreply.github.com"
+            em = f"{provider}-{gh_id}@users.noreply.tickmark"
         if current and current.get("role") == "guest":
             uid = current["id"]
-            c.execute("UPDATE users SET email=?, pw_hash='!', role=?, name=?, github_id=? WHERE id=?", (em, role, (name or "")[:80] or None, gh_id, uid))
+            c.execute(f"UPDATE users SET email=?, pw_hash='!', role=?, name=?, {col}=? WHERE id=?", (em, role, (name or "")[:80] or None, gh_id, uid))
             c.execute("DELETE FROM sessions WHERE user_id=?", (uid,))
         else:
             uid = "u_" + uuid.uuid4().hex[:16]
-            c.execute("INSERT INTO users(id,email,pw_hash,role,name,created_at,github_id) VALUES(?,?,?,?,?,?,?)",
+            c.execute(f"INSERT INTO users(id,email,pw_hash,role,name,created_at,{col}) VALUES(?,?,?,?,?,?,?)",
                       (uid, em, "!", role, (name or "")[:80] or None, _now(), gh_id))
         c.execute("COMMIT")
         return _public(c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()) | {"new": True}

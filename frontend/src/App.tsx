@@ -27,7 +27,7 @@ import { AccountCard } from "./components/AccountCard";
 import { Mark } from "./components/Mark";
 import { TVChart, TVTape, openMyTradingView } from "./components/TradingView";
 import { Portfolio } from "./components/Portfolio";
-import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart, ExternalLink } from "lucide-react";
+import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart, ExternalLink, LogIn } from "lucide-react";
 
 export type Level = "beginner" | "analyst";
 type CenterTab = "portfolio" | "evidence" | "journal" | "forward" | "documents" | "day" | "crypto" | "connections";
@@ -40,7 +40,7 @@ export interface Screen {
 
 export default function App() {
   const [auth, setAuth] = useState<{ portal: boolean; user: PortalUser | null; guest?: boolean; first_user?: boolean; open_signup?: boolean;
-    admin_unclaimed?: boolean; github_login?: boolean } | null>(null);
+    admin_unclaimed?: boolean; github_login?: boolean; social?: string[] } | null>(null);
   const [authBox, setAuthBox] = useState<"in" | "up" | null>(null);
   // Like any website: visitors land on the desk as a guest (real prices, paper trades kept on this browser), and sign in when they want.
   const inflight = useRef<Promise<void> | null>(null);
@@ -54,7 +54,8 @@ export default function App() {
   }).catch(() => setAuth({ portal: false, user: null })).finally(() => { inflight.current = null; }));
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    const msg = q.get("auth_error") ?? (q.get("signed_in") === "github" ? "Signed in with GitHub." : null);
+    const msg = q.get("auth_error") ?? (q.get("signed_in") ? `Signed in with ${q.get("signed_in") === "google" ? "Google" : "GitHub"}.` : null);
+    if (q.get("open") === "account") setTimeout(() => window.dispatchEvent(new Event("tickmark:open-account")), 800);
     if (msg) { setTimeout(() => (q.get("auth_error") ? sonner.error : sonner)(msg, { duration: 8000 }), 600); history.replaceState(null, "", location.pathname); }
     load();
     const out = () => { load(); };
@@ -64,21 +65,21 @@ export default function App() {
     return () => { window.removeEventListener("swingdesk:signin", out); window.removeEventListener("swingdesk:signup", up); };
   }, []);
   if (!auth) return <div className="pad muted">Loading…</div>;
-  if (auth.portal && !auth.user) return <Login firstUser={!!auth.first_user} openSignup={!!auth.open_signup} githubLogin={!!auth.github_login}
+  if (auth.portal && !auth.user) return <Login firstUser={!!auth.first_user} openSignup={!!auth.open_signup} social={auth.social ?? []}
     onIn={(u) => setAuth({ ...auth, user: u, first_user: false })} />;
   return (
     <>
-      <Desk adminUnclaimed={!!auth.admin_unclaimed} githubLogin={!!auth.github_login} user={auth.portal ? auth.user : null} key={`${auth.user?.id ?? "local"}:${auth.user?.role}`} guest={!!auth.guest} openAuth={setAuthBox} />
+      <Desk adminUnclaimed={!!auth.admin_unclaimed} social={auth.social ?? []} user={auth.portal ? auth.user : null} key={`${auth.user?.id ?? "local"}:${auth.user?.role}`} guest={!!auth.guest} openAuth={setAuthBox} />
       <AnimatePresence>
-        {authBox && <Login key="auth" firstUser={false} openSignup={!!auth.open_signup} githubLogin={!!auth.github_login} start={authBox} guest={!!auth.guest}
+        {authBox && <Login key="auth" firstUser={false} openSignup={!!auth.open_signup} social={auth.social ?? []} start={authBox} guest={!!auth.guest}
           onClose={() => setAuthBox(null)} onIn={() => { setAuthBox(null); load(); }} />}
       </AnimatePresence>
     </>
   );
 }
 
-function Desk({ user, guest = false, openAuth, adminUnclaimed = false, githubLogin = false }: { user: PortalUser | null; guest?: boolean;
-  openAuth: (m: "in" | "up") => void; adminUnclaimed?: boolean; githubLogin?: boolean }) {
+function Desk({ user, guest = false, openAuth, adminUnclaimed = false, social = [] }: { user: PortalUser | null; guest?: boolean;
+  openAuth: (m: "in" | "up") => void; adminUnclaimed?: boolean; social?: string[] }) {
   const [status, setStatus] = useState<Status_ | null>(null);
   const [screen, setScreen] = useState<Screen | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -96,6 +97,11 @@ function Desk({ user, guest = false, openAuth, adminUnclaimed = false, githubLog
   }, []);
   const [palette, setPalette] = useState(false);
   const comfort = useComfort();
+  useEffect(() => {   // the installed app's "Account" shortcut (/?open=account)
+    const open = () => { if (guest) openAuth("in"); else setSide("account"); };
+    window.addEventListener("tickmark:open-account", open);
+    return () => window.removeEventListener("tickmark:open-account", open);
+  }, [guest, openAuth]);
   const [tvLayout, setTvLayout] = useState<string | null>(null);
   useEffect(() => {
     const get = () => api.get<{ layout_url: string | null }>("/api/tradingview").then((r) => setTvLayout(r.layout_url)).catch(() => {});
@@ -209,6 +215,16 @@ function Desk({ user, guest = false, openAuth, adminUnclaimed = false, githubLog
           );
         })}
         <span className="rail-spacer" />
+        {user && (
+          <button className="rail-btn rail-account" onClick={() => {
+              if (guest) return openAuth("in");
+              setSide("account");
+              requestAnimationFrame(() => document.querySelector(".right")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+            }} aria-label={guest ? "Sign in" : "Account"} data-tip={guest ? "Sign in or create an account" : "Account and sign-ins"}>
+            {guest ? <LogIn size={18} strokeWidth={1.8} aria-hidden /> : <UserRound size={18} strokeWidth={1.8} aria-hidden />}
+            <span className="rail-label">{guest ? "Sign in" : "Account"}</span>
+          </button>
+        )}
         <button className="rail-btn rail-theme" onClick={() => comfort.setTheme(comfort.theme === "light" ? "dark" : "light")}
           aria-label={comfort.theme === "light" ? "Switch to dark theme" : "Switch to light theme"} data-tip={comfort.theme === "light" ? "Dark theme" : "Light theme"}>
           {comfort.theme === "light" ? <Moon size={18} strokeWidth={1.8} aria-hidden /> : <Sun size={18} strokeWidth={1.8} aria-hidden />}
@@ -317,7 +333,7 @@ function Desk({ user, guest = false, openAuth, adminUnclaimed = false, githubLog
             {side === "orders" && <OrdersPanel orders={orders} onChanged={refresh} notify={setToast} />}
             {side === "broker" && <BrokerPanel onChanged={refresh} notify={setToast} />}
             {side === "risk" && <RiskPanel onChanged={refresh} notify={setToast} />}
-            {side === "account" && <AccountPanel user={user} notify={setToast} adminUnclaimed={adminUnclaimed} githubLogin={githubLogin} />}
+            {side === "account" && <AccountPanel user={user} notify={setToast} adminUnclaimed={adminUnclaimed} social={social} />}
             </motion.div>
           </AnimatePresence>
         </aside>

@@ -1,0 +1,23 @@
+# Run Tickmark on any machine or free VM with Docker:  docker compose up -d   →  http://localhost:8000
+# Put real values in a .env file next to this one (never commit it). See docs/HOSTING.md.
+services:
+  tickmark:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - tickmark-data:/app/data          # accounts, desks and encrypted keys survive restarts and upgrades
+    environment:
+      SWINGDESK_PORTAL: "on"
+      SWINGDESK_OPEN_SIGNUP: "on"
+      SWINGDESK_MASTER_KEY: ${SWINGDESK_MASTER_KEY:?set SWINGDESK_MASTER_KEY in .env (any long random string)}
+      SWINGDESK_SETUP_CODE: ${SWINGDESK_SETUP_CODE:?set SWINGDESK_SETUP_CODE in .env}
+      SWINGDESK_PUBLIC_URL: ${SWINGDESK_PUBLIC_URL:-}          # https://your-domain when it's behind HTTPS
+      SWINGDESK_SECURE_COOKIES: ${SWINGDESK_SECURE_COOKIES:-off}
+      SWINGDESK_GOOGLE_CLIENT_ID: ${SWINGDESK_GOOGLE_CLIENT_ID:-}
+      SWINGDESK_GOOGLE_CLIENT_SECRET: ${SWINGDESK_GOOGLE_CLIENT_SECRET:-}
+      SWINGDESK_GITHUB_CLIENT_ID: ${SWINGDESK_GITHUB_CLIENT_ID:-}
+      SWINGDESK_GITHUB_CLIENT_SECRET: ${SWINGDESK_GITHUB_CLIENT_SECRET:-}
+volumes:
+  tickmark-data:
