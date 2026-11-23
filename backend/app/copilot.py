@@ -170,7 +170,8 @@ def delete_key() -> dict:
     return status()
 
 
-PLAN_CHOICES = ("free", "oss", "local", "openai", "gemini")
+PLAN_CHOICES = ("free", "free_gpt", "free_gemini", "oss", "local", "openai", "gemini")
+FREE_CLOUD = {"free_gpt": "openai", "free_gemini": "gemini"}     # free plans that run on the operator's OpenAI / Gemini key
 
 # Other frontier models through their OpenAI-compatible chat endpoints, on the user's own key.
 # Model names change often, so the picker lists what the key can actually use (GET /models) instead of a fixed list.
@@ -243,7 +244,7 @@ def settings() -> dict:
     if s["model"] in CLAUDE_MODELS and not key_source() and not CLIENT_FACTORY:
         from . import copilot_plans          # no key of their own: start people on whatever is free here
         cfg = copilot_plans.config()
-        s["model"] = "free" if cfg["free"]["enabled"] else "oss" if cfg["oss"]["enabled"] else s["model"]
+        s["model"] = next((p for p in copilot_plans.ORDER if cfg[p]["enabled"]), s["model"])
     return s
 
 
@@ -303,14 +304,13 @@ def status() -> dict:
     cloud = {p: {"name": v["name"], "configured": bool(_cloud_key(p)), "key_hint": credentials.hint(_cloud_key(p)),
                  "model": s.get(f"{p}_model"), "billed": v["billed"], "keys_at": v["keys_at"]} for p, v in CLOUD.items()}
     label = (CLAUDE_MODELS[s["model"]]["name"] + " · your key" if s["model"] in CLAUDE_MODELS else
-             f"{pl['free']['name']} ({pl['free']['model']})" if s["model"] == "free" else
-             f"{pl['oss']['name']} ({pl['oss']['model']})" if s["model"] == "oss" else
+             f"{pl[s['model']]['name']} ({pl[s['model']]['model']})" if s["model"] in pl else
              f"{CLOUD[s['model']]['name']}: {s.get(s['model'] + '_model') or 'pick a model'} · your key" if s["model"] in CLOUD else
              f"Local: {s['local_model']}")
-    ready = {"free": pl["free"]["enabled"], "oss": pl["oss"]["enabled"], "local": True,
+    ready = {**{p: pl[p]["enabled"] for p in pl}, "local": True,
              "openai": cloud["openai"]["configured"] and bool(cloud["openai"]["model"]),
              "gemini": cloud["gemini"]["configured"] and bool(cloud["gemini"]["model"])}.get(s["model"], claude_ok)
-    return {"configured": ready or claude_ok or pl["free"]["enabled"] or pl["oss"]["enabled"], "ready": ready, "claude_configured": claude_ok, "source": src,
+    return {"configured": ready or claude_ok or any(p["enabled"] for p in plans), "ready": ready, "claude_configured": claude_ok, "source": src,
             "key_hint": credentials.hint(k) if k else None, "model": s["model"], "effort": EFFORT, "plans": plans,
             "model_label": label,
             "settings": s, "local_loopback": _is_loopback(s["local_base_url"]),
@@ -673,7 +673,7 @@ def _save(thread_id: str, messages: list, title: str, model: str) -> None:
 
 def _family(model: str | None) -> str | None:
     """Conversation format: Claude's, or the OpenAI chat format shared by GPT, Gemini, open-source and local models."""
-    return None if not model else ("local" if model.startswith(("local:", "oss:", "openai:", "gemini:")) else "claude")
+    return None if not model else ("local" if model.startswith(("local:", "oss:", "openai:", "gemini:", "free_gpt:", "free_gemini:")) else "claude")
 
 
 def chat(text: str, thread_id: str | None = None, level: str = "beginner", model: str | None = None) -> dict:
@@ -687,7 +687,7 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
         raise CopilotError(f"Unknown model '{choice}'.")
     from . import copilot_plans
     cfg = copilot_plans.config()
-    if choice in ("free", "oss"):
+    if choice in copilot_plans.PLANS:
         copilot_plans.check(choice)
     if choice in CLOUD:
         if not _cloud_key(choice):
@@ -696,6 +696,7 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
             raise CopilotError(f"Pick a {CLOUD[choice]['name']} model in the Copilot tab.", 409)
     model_id = {"local": f"local:{s['local_model']}", "oss": f"oss:{cfg['oss']['model']}",
                 "free": f"free:{cfg['free']['model']}", "openai": f"openai:{s.get('openai_model')}",
+                **{p: f"{p}:{copilot_plans.model_for(p)}" for p in FREE_CLOUD if p == choice},
                 "gemini": f"gemini:{s.get('gemini_model')}"}.get(choice, choice)
     thread_id, messages, prev = _load(thread_id)
     if prev and _family(prev) != _family(model_id):
@@ -713,11 +714,15 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
     elif choice in CLOUD:
         out = _local_loop(messages, thread_id, {"local_base_url": CLOUD[choice]["base_url"], "local_model": s[f"{choice}_model"]},
                           api_key=_cloud_key(choice), provider=choice)
+    elif choice in FREE_CLOUD:
+        prov = FREE_CLOUD[choice]
+        out = _local_loop(messages, thread_id, {"local_base_url": CLOUD[prov]["base_url"], "local_model": copilot_plans.model_for(choice)},
+                          api_key=copilot_plans.operator_key(choice), provider=prov)
     elif choice == "free":
         out = _claude_loop(messages, thread_id, cfg["free"]["model"], operator=True)
     else:
         out = _claude_loop(messages, thread_id, choice)
-    if choice in ("free", "oss"):
+    if choice in copilot_plans.PLANS:
         copilot_plans.record(choice, out["usage"])
     _save(thread_id, messages, text, model_id)
     return {"thread_id": thread_id, "model": model_id, **out}

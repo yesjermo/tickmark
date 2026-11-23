@@ -95,3 +95,64 @@ def test_errors_are_readable(confirmed, cloud):
     r = confirmed.post("/api/copilot/chat", json={"text": "x", "model": "openai"})
     assert r.status_code == 429 and "quota" in r.json()["detail"]
     assert confirmed.put("/api/copilot/settings", json={"model": "openai", "openai_model": ""}).status_code == 400
+
+
+# ---------- free GPT / Gemini plans on the server's keys (sign in, no key of your own) ----------
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app import copilot_plans, portal  # noqa: E402
+
+
+@pytest.fixture
+def operator_cloud(monkeypatch, cloud):
+    monkeypatch.setenv("SWINGDESK_FREE_TIER", "on")
+    monkeypatch.setenv("OPENAI_API_KEY", KEYS["openai"])
+    monkeypatch.setenv("GEMINI_API_KEY", KEYS["gemini"])
+    monkeypatch.setenv("SWINGDESK_FREE_GPT_MESSAGES", "2")
+    monkeypatch.setattr(copilot_plans, "_model_cache", {})
+    return cloud
+
+
+def test_free_gpt_and_gemini_run_on_the_server_key_and_pick_the_newest_model(confirmed, operator_cloud):
+    f = operator_cloud(oa("GPT answer."), oa("Gemini answer."))
+    plans = {p["id"]: p for p in confirmed.get("/api/copilot").json()["plans"]}
+    assert plans["free_gpt"]["enabled"] and plans["free_gemini"]["enabled"] and plans["free_gpt"]["model"] == "newest GPT"
+    a = confirmed.post("/api/copilot/chat", json={"text": "x", "model": "free_gpt"}).json()
+    b = confirmed.post("/api/copilot/chat", json={"text": "y", "model": "free_gemini"}).json()
+    assert a["model"] == "free_gpt:gpt-5" and a["reply"] == "GPT answer." and b["model"] == "free_gemini:gemini-2.5-pro"
+    assert [x[0] for x in f.requests] == ["openai", "gemini"]
+    plans = {p["id"]: p for p in confirmed.get("/api/copilot").json()["plans"]}
+    assert plans["free_gpt"]["used"] == 1 and plans["free_gpt"]["model"] == "gpt-5" and plans["free_gemini"]["used"] == 1
+    assert credentials.get_secret("openai_api_key") is None                                      # user stored no key
+
+
+def test_free_gpt_allowance_ends_and_points_to_what_is_left(confirmed, operator_cloud):
+    operator_cloud(oa("1"), oa("2"))
+    for _ in range(2):
+        assert confirmed.post("/api/copilot/chat", json={"text": "x", "model": "free_gpt"}).status_code == 200
+    r = confirmed.post("/api/copilot/chat", json={"text": "x", "model": "free_gpt"})
+    assert r.status_code == 429 and "Free · Gemini" in r.json()["detail"] and "resets next month" in r.json()["detail"]
+
+
+def test_each_signed_in_user_gets_their_own_allowance_and_signed_out_gets_nothing(client, operator_cloud, monkeypatch):
+    monkeypatch.setenv("SWINGDESK_PORTAL", "on")
+    monkeypatch.setattr(portal, "_fail", {})
+    operator_cloud(*[oa("ok")] * 5)
+    anon = TestClient(client.app, headers={"x-swingdesk": "1"})
+    assert anon.post("/api/copilot/chat", json={"text": "x", "model": "free_gpt"}).status_code == 401
+    a, b = TestClient(client.app, headers={"x-swingdesk": "1"}), TestClient(client.app, headers={"x-swingdesk": "1"})
+    a.post("/api/auth/signup", json={"email": "a@example.com", "password": "correct horse battery"})
+    code = a.post("/api/portal/invites", json={}).json()["code"]
+    b.post("/api/auth/signup", json={"email": "b@example.com", "password": "correct horse battery", "invite": code})
+    assert a.get("/api/copilot").json()["model"] in ("free_gpt", "free_gemini")                 # no key: starts on a free plan
+    for _ in range(2):
+        assert a.post("/api/copilot/chat", json={"text": "x", "model": "free_gpt"}).status_code == 200
+    assert a.post("/api/copilot/chat", json={"text": "x", "model": "free_gpt"}).status_code == 429
+    assert b.post("/api/copilot/chat", json={"text": "x", "model": "free_gpt"}).status_code == 200
+
+
+def test_free_plans_off_unless_the_operator_turns_them_on(confirmed, cloud, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", KEYS["openai"])                                        # key alone is not enough
+    r = confirmed.post("/api/copilot/chat", json={"text": "x", "model": "free_gpt"})
+    assert r.status_code == 409 and "isn't offered" in r.json()["detail"]

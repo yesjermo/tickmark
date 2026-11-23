@@ -1,36 +1,82 @@
-"""Copilot plans, like an IDE copilot's free and paid tiers.
+"""Copilot plans, like an IDE copilot's free tier: sign in, get a monthly allowance, no API key needed.
 
-  free   Claude on the operator's API key, a monthly allowance of messages per user
-         (SWINGDESK_FREE_TIER=on, SWINGDESK_FREE_MESSAGES=50, SWINGDESK_FREE_MODEL=claude-opus-5-5).
-  oss    an open-source model the operator hosts (Ollama, vLLM, llama.cpp: any OpenAI-compatible server),
-         free for everyone (SWINGDESK_OSS_BASE_URL, SWINGDESK_OSS_MODEL, fair-use SWINGDESK_OSS_DAILY=300).
-  own    the user's own Anthropic API key (any Claude model) or their own local model server: unlimited, they pay
-         their provider directly.
+  free         Claude on the operator's Anthropic key        (ANTHROPIC_API_KEY, SWINGDESK_FREE_MESSAGES=50,
+                                                              SWINGDESK_FREE_MODEL=claude-opus-5-5)
+  free_gpt     OpenAI GPT on the operator's OpenAI key        (OPENAI_API_KEY, SWINGDESK_FREE_GPT_MESSAGES=50,
+                                                              SWINGDESK_FREE_GPT_MODEL, optional)
+  free_gemini  Google Gemini on the operator's Gemini key     (GEMINI_API_KEY or GOOGLE_API_KEY, SWINGDESK_FREE_GEMINI_MESSAGES=100,
+                                                              SWINGDESK_FREE_GEMINI_MODEL, optional)
+  oss          an open-source model the operator hosts        (SWINGDESK_OSS_BASE_URL, SWINGDESK_OSS_MODEL, SWINGDESK_OSS_DAILY=300)
 
-A "message" is one question from the user, however many lookups the copilot makes to answer it. Usage is metered
-per user in portal.db, so it survives restarts and is shared by every device the user signs in from.
+The three free plans are offered only when SWINGDESK_FREE_TIER=on and that provider's key is set. Without a pinned
+GPT/Gemini model, the newest flagship the operator's key can use is picked from the provider's model list (cached).
+Unlimited use: the user's own Claude, OpenAI or Gemini key, or their own local model server.
+
+A "message" is one question from the user, however many lookups the copilot makes to answer it. Usage is metered per
+signed-in user in portal.db ("local" in the single-user app), so it follows the user across devices and restarts.
 """
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime, timezone
 
 from . import portal
+
+PLANS = {
+    "free": {"name": "Free · Claude", "provider": "anthropic", "key_env": ("ANTHROPIC_API_KEY",), "limit_env": "SWINGDESK_FREE_MESSAGES",
+             "limit": 50, "model_env": "SWINGDESK_FREE_MODEL", "default_model": "claude-opus-5-5", "period": "month"},
+    "free_gpt": {"name": "Free · GPT", "provider": "openai", "key_env": ("OPENAI_API_KEY",), "limit_env": "SWINGDESK_FREE_GPT_MESSAGES",
+                 "limit": 50, "model_env": "SWINGDESK_FREE_GPT_MODEL", "default_model": None, "period": "month"},
+    "free_gemini": {"name": "Free · Gemini", "provider": "gemini", "key_env": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+                    "limit_env": "SWINGDESK_FREE_GEMINI_MESSAGES", "limit": 100, "model_env": "SWINGDESK_FREE_GEMINI_MODEL",
+                    "default_model": None, "period": "month"},
+    "oss": {"name": "Open-source · free", "provider": "oss", "key_env": (), "limit_env": "SWINGDESK_OSS_DAILY", "limit": 300,
+            "model_env": "SWINGDESK_OSS_MODEL", "default_model": "qwen3.5:9b", "period": "day"},
+}
+ORDER = ("free", "free_gpt", "free_gemini", "oss")
+_model_cache: dict[str, tuple[float, str]] = {}
+CACHE_SECONDS = 6 * 3600
 
 
 def _on(name: str, default: str = "off") -> bool:
     return os.environ.get(name, default).lower() in ("on", "1", "true")
 
 
+def operator_key(plan: str) -> str | None:
+    return next((os.environ[k] for k in PLANS[plan]["key_env"] if os.environ.get(k)), None)
+
+
+def _enabled(plan: str) -> bool:
+    if plan == "oss":
+        return bool(os.environ.get("SWINGDESK_OSS_BASE_URL"))
+    return _on("SWINGDESK_FREE_TIER") and bool(operator_key(plan))
+
+
 def config() -> dict:
-    return {
-        "free": {"enabled": _on("SWINGDESK_FREE_TIER") and bool(os.environ.get("ANTHROPIC_API_KEY")),
-                 "limit": int(os.environ.get("SWINGDESK_FREE_MESSAGES", "50")), "period": "month",
-                 "model": os.environ.get("SWINGDESK_FREE_MODEL", "claude-opus-5-5")},
-        "oss": {"enabled": bool(os.environ.get("SWINGDESK_OSS_BASE_URL")), "base_url": os.environ.get("SWINGDESK_OSS_BASE_URL", ""),
-                "model": os.environ.get("SWINGDESK_OSS_MODEL", "qwen3.5:9b"), "limit": int(os.environ.get("SWINGDESK_OSS_DAILY", "300")),
-                "period": "day"},
-    }
+    out = {}
+    for plan, p in PLANS.items():
+        out[plan] = {"enabled": _enabled(plan), "limit": int(os.environ.get(p["limit_env"], str(p["limit"]))), "period": p["period"],
+                     "model": os.environ.get(p["model_env"]) or p["default_model"] or (_model_cache.get(plan, (0, None))[1]),
+                     "provider": p["provider"]}
+    out["oss"]["base_url"] = os.environ.get("SWINGDESK_OSS_BASE_URL", "")
+    return out
+
+
+def model_for(plan: str) -> str:
+    """The model a plan runs: pinned by the operator, or the newest flagship the operator's key can use (cached)."""
+    from .copilot import CopilotError, cloud_models
+    pinned = os.environ.get(PLANS[plan]["model_env"]) or PLANS[plan]["default_model"]
+    if pinned:
+        return pinned
+    hit = _model_cache.get(plan)
+    if hit and time.time() - hit[0] < CACHE_SECONDS:
+        return hit[1]
+    models = cloud_models(PLANS[plan]["provider"], operator_key(plan))
+    if not models:
+        raise CopilotError(f"The server's {PLANS[plan]['name']} key can't use any chat model right now.", 502)
+    _model_cache[plan] = (time.time(), models[0])
+    return models[0]
 
 
 def _period(kind: str) -> str:
@@ -58,16 +104,18 @@ def used(plan: str, user: str | None = None) -> int:
 
 def check(plan: str) -> None:
     from .copilot import CopilotError
-    cfg = config()[plan]
-    if not cfg["enabled"]:
-        raise CopilotError({"free": "The free Claude plan isn't offered on this server. Add your own Anthropic key, or use the open-source model.",
-                            "oss": "No open-source model is hosted on this server. Use your own local model server or a Claude key."}[plan], 409)
-    n = used(plan)
-    if n >= cfg["limit"]:
-        when = "next month" if cfg["period"] == "month" else "tomorrow (UTC)"
-        raise CopilotError(f"You've used all {cfg['limit']} {'free Claude' if plan == 'free' else 'open-source'} messages this "
-                           f"{cfg['period']}. It resets {when}. Switch to the {'open-source model' if plan == 'free' else 'free Claude plan'} "
-                           "or add your own key for unlimited use.", 429)
+    cfg = config()
+    name = PLANS[plan]["name"]
+    if not cfg[plan]["enabled"]:
+        others = [PLANS[p]["name"] for p in ORDER if p != plan and cfg[p]["enabled"]]
+        raise CopilotError(f"{name} isn't offered on this server." + (f" Try {', '.join(others)}," if others else "")
+                           + " or add your own Claude, OpenAI or Gemini key.", 409)
+    if used(plan) >= cfg[plan]["limit"]:
+        when = "next month" if cfg[plan]["period"] == "month" else "tomorrow (UTC)"
+        others = [PLANS[p]["name"] for p in ORDER if p != plan and cfg[p]["enabled"] and used(p) < cfg[p]["limit"]]
+        raise CopilotError(f"You've used all {cfg[plan]['limit']} {name} messages this {cfg[plan]['period']}. It resets {when}. "
+                           + (f"You still have {', '.join(others)}; " if others else "")
+                           + "your own key gives unlimited use.", 429)
 
 
 def record(plan: str, usage: dict) -> None:
@@ -86,11 +134,11 @@ def record(plan: str, usage: dict) -> None:
 def summary() -> list[dict]:
     cfg = config()
     out = []
-    for plan in ("free", "oss"):
-        p = cfg[plan]
-        out.append({"id": plan, "enabled": p["enabled"], "limit": p["limit"], "period": p["period"],
-                    "used": used(plan) if p["enabled"] else 0, "model": p["model"],
-                    "name": "Free · Claude" if plan == "free" else "Open-source · free",
-                    "note": (f"{p['limit']} messages a month with {p['model']}, on this server's key" if plan == "free"
-                             else f"{p['model']} hosted by this server, free (fair use {p['limit']}/day)")})
+    for plan in ORDER:
+        p, c = PLANS[plan], cfg[plan]
+        model = c["model"] or ("newest GPT" if plan == "free_gpt" else "newest Gemini" if plan == "free_gemini" else "")
+        note = (f"{c['model'] or 'the newest model'} hosted by this server, free (fair use {c['limit']}/day)" if plan == "oss" else
+                f"{c['limit']} messages a month with {model}, paid for by this server")
+        out.append({"id": plan, "enabled": c["enabled"], "limit": c["limit"], "period": c["period"],
+                    "used": used(plan) if c["enabled"] else 0, "model": model, "name": p["name"], "note": note})
     return out

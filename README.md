@@ -220,13 +220,25 @@ The top bar switches between three workspaces. Each keeps its own record, and a 
 
 Switching never deletes anything: the backtest and live-test databases are kept separately. **Live trading** opens the Broker tab if no real-money switch is on yet.
 
-## Copilot plans: free, open-source, or your own key
+## Copilot plans: Claude, GPT and Gemini, free with sign-in or on your own key
 
-Like an IDE copilot, there's a free tier with a limit, a free open-source option, and unlimited use with your own key:
+The copilot works like an IDE copilot's free tier:
+1. Clients and users **sign in to their Tickmark account**. On a hosted server, sign-in is required: the server refuses copilot requests from anyone not signed in.
+2. They pick **Claude, GPT or Gemini** in the Copilot tab's model picker.
+3. They get a monthly allowance, with **no API key needed**: the server's own keys pay for it, and each signed-in user has their own meter.
+
+Anyone who wants more uses their own key and gets unlimited use.
+
+**Who can see what:**
+- **Not signed in:** the hosted server refuses every request, so no copilot at all.
+- **Signed in:** the free Claude, GPT and Gemini plans the server offers, each with a meter under the model picker. With no key of their own, users start on the first free plan offered.
+- **Own key added:** any Claude model, any GPT or Gemini model that key can use, or a local model. Unlimited.
 
 | Plan | Who pays | Limit | Server setting |
 |---|---|---|---|
 | **Free · Claude** | the server operator's Anthropic key | `SWINGDESK_FREE_MESSAGES` per user per month (default 50) | `SWINGDESK_FREE_TIER=on` + `ANTHROPIC_API_KEY`; model `SWINGDESK_FREE_MODEL` (default claude-opus-5-5) |
+| **Free · GPT** | the server operator's OpenAI key | `SWINGDESK_FREE_GPT_MESSAGES` per user per month (default 50) | `SWINGDESK_FREE_TIER=on` + `OPENAI_API_KEY`; model `SWINGDESK_FREE_GPT_MODEL`, or left empty to use the newest flagship the key can access |
+| **Free · Gemini** | the server operator's Gemini key | `SWINGDESK_FREE_GEMINI_MESSAGES` per user per month (default 100) | `SWINGDESK_FREE_TIER=on` + `GEMINI_API_KEY` (or `GOOGLE_API_KEY`); model `SWINGDESK_FREE_GEMINI_MODEL`, or the newest flagship |
 | **Open-source · free** | the operator hosts the model | fair use, `SWINGDESK_OSS_DAILY` per day (default 300) | `SWINGDESK_OSS_BASE_URL` (Ollama, vLLM, llama.cpp: any OpenAI-compatible server) + `SWINGDESK_OSS_MODEL` |
 | Claude, your own key | you, through Anthropic | unlimited | Copilot tab → paste key |
 | **OpenAI GPT**, your own key | you, through OpenAI | unlimited | Copilot tab → OpenAI GPT → paste key (platform.openai.com) |
@@ -239,6 +251,22 @@ Like an IDE copilot, there's a free tier with a limit, a free open-source option
 - **Gemini schemas:** Gemini receives the tool schemas converted to the subset it accepts (no `additionalProperties`, `nullable` instead of type lists).
 - **Switching models:** GPT, Gemini, open-source and local models share one conversation format, so you can switch between them mid-conversation; switching to or from Claude starts a new conversation.
 - **Testing so far:** tested against fake OpenAI and Gemini servers. Both real endpoints were confirmed reachable (they reject a missing or dummy key as expected), but no real GPT or Gemini call has been made, because that needs your key.
+
+**Turning on the free GPT and Gemini plans (server operator):**
+1. Set `SWINGDESK_FREE_TIER=on`.
+2. Add `OPENAI_API_KEY` and/or `GEMINI_API_KEY` to the server's environment, preferably from a secret manager.
+3. Optionally, pin the model and change the allowance with the settings above.
+
+A plan is only offered when its key is present. When a user's allowance runs out, the message says when it resets and which free plans they still have left.
+
+**Why users can't sign in with ChatGPT or Gemini subscriptions.** ChatGPT Plus/Pro, Claude Pro/Max and Google AI Pro/Gemini subscriptions can't be used by other apps:
+- OpenAI's "Sign in with ChatGPT" is limited to its own tools.
+- Anthropic doesn't allow it.
+- Google's consumer Gemini plan doesn't cover API calls from other apps.
+
+So "sign in" here means signing in to Tickmark, and the server's keys cover the free allowance. Two options do use the user's own AI plan:
+- **Claude:** add Tickmark as a connector inside Claude (see "Using your Claude plan instead" below). Claude then does the AI work on the user's Claude plan.
+- **Gemini, possible later:** Google offers OAuth for the Gemini API, but it bills the user's own Google Cloud project. Offering it means registering an OAuth app with Google and passing their verification, so it isn't built yet.
 
 A "message" is one question, however many lookups it takes. Usage is metered per user, in `portal.db`, and shown as a bar under the model picker. When the free allowance runs out, the copilot says when it resets and suggests the alternatives. With no key of their own, people start on whichever included plan the server offers.
 
@@ -567,7 +595,7 @@ Status logic: all hard rules pass → **Qualifies** (with a warning if earnings 
 
 | Integration | Status |
 |---|---|
-| FastAPI + SQLite backend, all endpoints | **Exercised** by 298 pytest tests and in the browser |
+| FastAPI + SQLite backend, all endpoints | **Exercised** by 302 pytest tests and in the browser |
 | Day trades on Alpaca Paper (bracket, flatten, day monitor) | **Tested against the fake Alpaca server**: bracket body (DAY, take-profit, stop), stop and target leg rows, target fill, stop fill, the monitor's flatten at 15:55 (and that it sends only one sell), canceling an unfilled entry, the critical alert after the close, manual flatten through the broker, swing exits skipping day trades, replay staying on the simulator, and the real-money block. In the real app the monitor thread starts, and a replay ticket (SNDK, 2026-11-20 09:50) showed its route; no order was sent. **No bracket has been placed on the real Alpaca paper API yet.** That needs market hours and a qualifying signal. |
 | Daily auto-refresh scheduler | **Exercised** by tests with a fake clock: next-run times including weekends and Thanksgiving, retries, skipping in demo mode or when off, and a scheduled 16:20 run that fills a paper order and advances the forward test. In the real server, the thread starts and reports its next run as Mon 2026-11-23 16:20 ET. **A real 16:20 run hasn't happened yet.** |
 | One-shot refresh CLI + cron | **Exercised**: installed in the user's crontab. A one-time test entry fired at 01:06 PST under cron and fetched real Yahoo data into `data/refresh.log`, so cron can reach `~/Documents`. The test entry was then removed. |
