@@ -100,3 +100,24 @@ def test_backup_pauses_without_a_fixed_master_key(tmp_path, monkeypatch):
     monkeypatch.delenv("SWINGDESK_MASTER_KEY", raising=False)
     monkeypatch.setattr(backup, "BLOCKED", None)
     assert backup.restore_if_empty().startswith("backup paused")
+
+
+def test_admin_can_see_backup_status_and_back_up_now(client, monkeypatch):
+    monkeypatch.setenv("SWINGDESK_BACKUP_REPO", "me/data")
+    monkeypatch.setenv("SWINGDESK_BACKUP_TOKEN", "t")
+    monkeypatch.setenv("SWINGDESK_MASTER_KEY", "k" * 40)
+    monkeypatch.setattr(backup, "BLOCKED", None)
+    puts = []
+
+    def handle(req):
+        if req.method == "PUT":
+            puts.append(json.loads(req.content)["message"])
+            return httpx.Response(201, json={})
+        return httpx.Response(404)
+    monkeypatch.setattr(backup, "TRANSPORT", httpx.MockTransport(handle))
+    st = client.get("/api/admin/backup").json()
+    assert st["enabled"] and st["repo"] == "me/data" and st["paused"] is None and st["has_master_key"]
+    st = client.post("/api/admin/backup/now").json()
+    assert puts and st.get("last_ok")
+    monkeypatch.delenv("SWINGDESK_BACKUP_TOKEN")
+    assert client.post("/api/admin/backup/now").status_code == 409

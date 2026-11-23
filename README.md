@@ -442,9 +442,13 @@ The repo includes a `Dockerfile` (it builds the web app, then serves the app and
 5. Optional, free copilot plans: as the admin, open **Account → Free AI plans** and paste the server's keys (Claude, OpenAI, Gemini, or a hosted open-model key such as Groq's), and switch the free tier on. Keys are checked before saving, stored encrypted, and never sent back to the browser. Environment variables in the Render dashboard (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `SWINGDESK_FREE_TIER=on`) still work and take priority. Never commit keys. Google AI Studio's Gemini key has a free tier, so it's the cheapest way to offer a free cloud plan.
 
 **Keeping data on the free plan (encrypted backup):** the free plan wipes the disk on every sleep or redeploy. Tickmark can back the whole data folder up to a private GitHub repo and restore it on startup:
-1. Create a **private** GitHub repo, for example `tickmark-data`.
+1. Create a **private** GitHub repo. For this deployment it exists: `yesjermo/tickmark-data` (empty until the server's first backup).
 2. Create a fine-grained personal access token with **Contents: read and write** on that one repo only.
 3. In Render → tickmark → **Environment**, set `SWINGDESK_BACKUP_REPO` (`owner/tickmark-data`) and `SWINGDESK_BACKUP_TOKEN`.
+
+Then check **Account → Data backup** (administrator): it shows whether backup is on, when it last saved, how many accounts there are, and has **Back up now**.
+
+Checked 2026-11-24 against the real GitHub API: an encrypted snapshot (an account row and a desk file) was pushed to the private repo, restored into an empty folder byte-for-byte, then deleted.
 
 The snapshot is encrypted with `SWINGDESK_MASTER_KEY` before it leaves the server, so GitHub only stores ciphertext; keep the master key unchanged or the backup can't be read. A snapshot is pushed soon after every sign-up, at most once a minute after other changes, and on shutdown. If the instance is killed without a shutdown signal, up to about a minute of changes can be lost. On startup with an empty disk, the latest snapshot is restored before the app starts. Checked with a fake GitHub in tests (snapshot, encryption, restore, refusing unsafe paths); not yet run against the live service.
 

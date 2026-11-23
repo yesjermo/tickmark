@@ -96,6 +96,7 @@ export function AccountPanel({ user, notify, adminUnclaimed = false, social = []
             </tbody></table>
         )}
       </section>
+      {admin && user && <DataBackup notify={notify} />}
       {admin && <AdminAI notify={notify} />}
       {user && admin && (
         <section>
@@ -107,5 +108,36 @@ export function AccountPanel({ user, notify, adminUnclaimed = false, social = []
         </section>
       )}
     </div>
+  );
+}
+
+/** Admin: is everyone's data (accounts, desks, encrypted keys) being saved off the server? */
+function DataBackup({ notify }: { notify: (s: string) => void }) {
+  const [st, setSt] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.get<any>("/api/admin/backup").then(setSt).catch(() => {}); }, []);
+  async function now() {
+    setBusy(true);
+    try { const r = await api.post<any>("/api/admin/backup/now"); setSt(r); notify(r.last_error ? `Backup failed: ${r.last_error}` : "Everyone's data was backed up."); }
+    catch (e) { notify((e as ApiError).message); } finally { setBusy(false); }
+  }
+  if (!st) return null;
+  const ok = st.enabled && !st.paused && !st.last_error;
+  return (
+    <section>
+      <h3>Data backup</h3>
+      {st.enabled ? (
+        <p className={`small ${ok ? "" : "loss"}`}>
+          {st.paused ? `Paused: ${st.paused}.` : st.last_error ? `Last try failed: ${st.last_error}` :
+            st.last_ok ? `Saved ${new Date(st.last_ok).toLocaleString()} to the private repo ${st.repo}.` : `On: saving to the private repo ${st.repo} after each change.`}
+          {" "}{st.accounts} account{st.accounts === 1 ? "" : "s"} on this server.
+        </p>
+      ) : (
+        <p className="small loss">Off: accounts and desks are lost whenever this free server sleeps or redeploys. Set SWINGDESK_BACKUP_REPO
+          and SWINGDESK_BACKUP_TOKEN in the server's settings (see README → Keeping data on the free plan).</p>
+      )}
+      {!st.has_master_key && <p className="small loss">SWINGDESK_MASTER_KEY isn't set, so backups can't be read back. Set it once and never change it.</p>}
+      {st.enabled && <div className="row"><button className="btn small" disabled={busy} onClick={now}>{busy ? "Backing up…" : "Back up now"}</button></div>}
+    </section>
   );
 }

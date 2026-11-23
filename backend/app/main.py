@@ -355,6 +355,34 @@ def _admin_ai_state() -> dict:
             "plans": copilot_plans.summary()}
 
 
+def _backup_state() -> dict:
+    from . import backup
+    repo = os.environ.get("SWINGDESK_BACKUP_REPO", "")
+    portal_db = db.DATA_DIR / "portal.db"
+    st = {**backup.BACKUP.state, "enabled": backup.enabled(), "repo": repo or None, "paused": backup.BLOCKED,
+          "has_master_key": bool(os.environ.get("SWINGDESK_MASTER_KEY")),
+          "accounts": portal.real_user_count() if portal_db.exists() else 0}
+    st.pop("enabled_flag", None)
+    return st
+
+
+@app.get("/api/admin/backup")
+def admin_backup(request: Request):
+    """Is everyone's data being saved off the server? (admin only)"""
+    _admin(request)
+    return _backup_state()
+
+
+@app.post("/api/admin/backup/now")
+async def admin_backup_now(request: Request):
+    _admin(request)
+    from . import backup
+    if not backup.enabled():
+        raise HTTPException(409, "Backup is off: set SWINGDESK_BACKUP_REPO and SWINGDESK_BACKUP_TOKEN in the server's settings first.")
+    await run_in_threadpool(backup.BACKUP.maybe_push, True)
+    return _backup_state()
+
+
 @app.get("/api/admin/ai")
 def admin_ai(request: Request):
     _admin(request)
