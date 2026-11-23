@@ -509,3 +509,40 @@ td.num, .num { font-variant-numeric: tabular-nums; }
 .conn-state.st-setup { color: var(--warn); }
 .watch .quote { font-size: 11.5px; margin-left: auto; margin-right: 6px; white-space: nowrap; }
 .admin-ai { display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 14px; } .admin-ai .row { gap: 6px; align-items: center; } .admin-ai input:not([type=checkbox]) { flex: 1; }
+
+/* ---- Comfort: focus mode, music, cursor ---- */
+.comfort { position: relative; }
+.iconbtn.lit { border-color: var(--accent); color: var(--accent); }
+.comfort-pop { position: absolute; right: 0; top: 40px; width: 320px; z-index: 40; padding: 14px; display: grid; gap: 12px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 50px #000a; transform-origin: top right; }
+.comfort-pop .opt { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.comfort-pop .opt b { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.comfort-pop .opt small { display: block; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+.comfort-pop .opt input[type=checkbox] { width: auto; flex: none; margin: 3px 0 0; accent-color: var(--accent); }
+.comfort-pop input[type=range] { flex: 1; accent-color: var(--accent); }
+.comfort-pop .btn { display: inline-flex; align-items: center; gap: 6px; }
+.focus-strip { display: flex; align-items: center; gap: 14px; padding: 12px 18px; background: #12233a; border-bottom: 1px solid #23415f; }
+.focus-strip .btn { display: inline-flex; align-items: center; gap: 6px; }
+.focus-k { font: 600 11px "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
+.focus-v { font-size: 16px; }
+.focus-strip .spacer { flex: 1; }
+body.focus-mode { font-size: 15.5px; }
+body.focus-mode .tb-context, body.focus-mode .banner, body.focus-mode .acct .muted { display: none; }
+body.focus-mode .tabs button:not(.on) { opacity: .55; }
+body.focus-mode .tabs button:not(.on):hover { opacity: 1; }
+body.focus-mode .card, body.focus-mode .chart-card { box-shadow: none; }
+body.focus-mode * { transition: none !important; animation: none !important; }
+
+/* Tickmark cursor: accent arrow, pointer hand for controls, crosshair on charts. */
+body.tm-cursor, body.tm-cursor * {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpath d='M3 2.5 18 10l-6.4 1.9L8.8 18.5z' fill='%235ea8e8' stroke='%2307121d' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E") 3 2, auto;
+}
+body.tm-cursor :is(button, a, select, summary, label, [role=button], [role=option], .opt):not(:disabled),
+body.tm-cursor :is(button, a, select, summary, label, [role=button], [role=option]):not(:disabled) * {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='7' fill='%235ea8e833' stroke='%235ea8e8' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%235ea8e8'/%3E%3C/svg%3E") 12 12, pointer;
+}
+body.tm-cursor :is(input:not([type=checkbox]):not([type=range]), textarea, [contenteditable=true]) { cursor: text; }
+body.tm-cursor :disabled { cursor: not-allowed; }
+body.tm-cursor .chart-card canvas, body.tm-cursor .chart-card canvas * {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M12 2v7M12 15v7M2 12h7M15 12h7' stroke='%23e6e9ed' stroke-width='1.6'/%3E%3Ccircle cx='12' cy='12' r='1.6' fill='%235ea8e8'/%3E%3C/svg%3E") 12 12, crosshair;
+}

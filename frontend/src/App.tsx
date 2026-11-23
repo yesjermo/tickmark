@@ -20,6 +20,8 @@ import { AccountPanel } from "./components/AccountPanel";
 import { Connections } from "./components/Connections";
 import { CommandMenu, PaletteAction } from "./components/CommandMenu";
 import { Toaster, toast as sonner } from "sonner";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
+import { FocusStrip, useComfort } from "./components/Comfort";
 import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound } from "lucide-react";
 
 export type Level = "beginner" | "analyst";
@@ -63,6 +65,7 @@ function Desk({ user }: { user: PortalUser | null }) {
     (bad ? sonner.error : sonner)(m, { duration: bad ? 9000 : 5000 });
   }, []);
   const [palette, setPalette] = useState(false);
+  const comfort = useComfort();
   const [cryptoPrefill, setCryptoPrefill] = useState<CryptoForm | null>(null);
   const [prefill, setPrefill] = useState<{ symbol: string; overrides: Record<string, any>; n: number } | null>(null);
 
@@ -128,13 +131,23 @@ function Desk({ user }: { user: PortalUser | null }) {
     { id: "a-refresh", group: "Actions", label: "Reload panels", icon: "refresh", run: refresh },
   ];
 
+  // Focus mode shows one next step at a time.
+  const best = screen?.results.find((r) => r.status === "QUALIFIES" || r.status === "QUALIFIES_WITH_WARNING");
+  const nextStep = !screen ? { text: "Loading your watchlist…" }
+    : !screen.ruleset.version ? { text: "Save your rules as a version before any paper trade.", action: "Open Strategy", go: () => setSide("strategy") }
+    : status?.kill_switch?.on ? { text: "The kill switch is on. Nothing new will be sent until you turn it off.", action: "Open Risk", go: () => setSide("risk") }
+    : best ? { text: `${best.symbol} qualifies. Read why, then decide on the ticket.`, action: `Review ${best.symbol}`, go: () => { setSelected(best.symbol); setCenter("evidence"); setSide("order"); } }
+    : { text: "Nothing qualifies right now. Check again after the close; no trade is a fine outcome." };
+
   return (
+    <MotionConfig reducedMotion={comfort.focus ? "always" : "user"}>
     <div className="app">
-      <TopBar status={status} level={level} setLevel={setLevel} onChanged={refresh} notify={setToast} tick={tick}
+      <TopBar comfort={comfort} status={status} level={level} setLevel={setLevel} onChanged={refresh} notify={setToast} tick={tick}
         openPalette={() => setPalette(true)} openConnections={() => setCenter("connections")} openBroker={() => setSide("broker")} />
       <CommandMenu open={palette} setOpen={setPalette} actions={actions} />
       <Toaster theme="dark" position="bottom-right" closeButton toastOptions={{ className: "sd-toast" }} />
-      {screen && !screen.ruleset.version && (
+      {comfort.focus && <FocusStrip step={nextStep} onGo={"go" in nextStep ? nextStep.go : undefined} />}
+      {screen && !screen.ruleset.version && !comfort.focus && (
         <div className="banner">
           Rules are an unconfirmed draft. Review the definitions in <b>Strategy</b> and save them as a version before placing paper trades.
         </div>
@@ -161,15 +174,18 @@ function Desk({ user }: { user: PortalUser | null }) {
               );
             })}
           </nav>
-          <section className="center-body">
-            {center === "evidence" && ev && <Evidence ev={ev} level={level} ruleset={screen!.ruleset} tick={tick} />}
-            {center === "journal" && <Journal entries={journal} level={level} onChanged={refresh} tick={tick} />}
-            {center === "forward" && <Forward tick={tick} level={level} live={live} />}
-            {center === "documents" && <Documents symbol={selected} />}
-            {center === "connections" && <Connections notify={setToast} goTab={(t) => setSide(t as SideTab)} />}
-            {center === "day" && <DayTrading notify={setToast} onChanged={refresh} />}
-            {center === "crypto" && <Crypto notify={setToast} prefill={cryptoPrefill} onPrefillUsed={() => setCryptoPrefill(null)} />}
-          </section>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.section key={center} className="center-body" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}>
+              {center === "evidence" && ev && <Evidence ev={ev} level={level} ruleset={screen!.ruleset} tick={tick} />}
+              {center === "journal" && <Journal entries={journal} level={level} onChanged={refresh} tick={tick} />}
+              {center === "forward" && <Forward tick={tick} level={level} live={live} />}
+              {center === "documents" && <Documents symbol={selected} />}
+              {center === "connections" && <Connections notify={setToast} goTab={(t) => setSide(t as SideTab)} />}
+              {center === "day" && <DayTrading notify={setToast} onChanged={refresh} />}
+              {center === "crypto" && <Crypto notify={setToast} prefill={cryptoPrefill} onPrefillUsed={() => setCryptoPrefill(null)} />}
+            </motion.section>
+          </AnimatePresence>
         </main>
         <aside className="right">
           <nav className="tabs">
@@ -186,7 +202,9 @@ function Desk({ user }: { user: PortalUser | null }) {
               );
             })}
           </nav>
-          <div className="side-body">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={side} className="side-body" initial={{ opacity: 0, x: 6 }} animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0 }} transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}>
             {side === "copilot" && (
               <Copilot level={level} notify={setToast} onChanged={refresh} openDay={() => setCenter("day")}
                 openCrypto={(form) => { setCryptoPrefill(form); setCenter("crypto"); }}
@@ -201,9 +219,11 @@ function Desk({ user }: { user: PortalUser | null }) {
             {side === "broker" && <BrokerPanel onChanged={refresh} notify={setToast} />}
             {side === "risk" && <RiskPanel onChanged={refresh} notify={setToast} />}
             {side === "account" && <AccountPanel user={user} notify={setToast} />}
-          </div>
+            </motion.div>
+          </AnimatePresence>
         </aside>
       </div>
     </div>
+    </MotionConfig>
   );
 }

@@ -1,6 +1,6 @@
 # Tickmark
 
-**Live app (invite-only):** https://tickmark-yqj2.onrender.com · **Project page:** https://yesjermo.github.io/tickmark-site/ (this repository, `tickmark`, is private; the page is published from the public `tickmark-site` repo).
+**Live app (open sign-up):** https://tickmark-yqj2.onrender.com · **Project page:** https://yesjermo.github.io/tickmark-site/ (this repository, `tickmark`, is private; the page is published from the public `tickmark-site` repo).
 
 A working prototype of a broker-connected research and paper-trading assistant for a US equity swing trader, inspired by HKUST's InvestLM. It answers one question end to end:
 
@@ -253,7 +253,9 @@ Anyone who wants more uses their own key and gets unlimited use.
 - **Testing so far:** tested against fake OpenAI and Gemini servers. Both real endpoints were confirmed reachable (they reject a missing or dummy key as expected), but no real GPT or Gemini call has been made, because that needs your key.
 
 **Why a free plan says "not offered here".** Someone has to pay for, or run, every free plan. A plan only appears once the server has what it needs: the operator's API key for that provider (free Claude, GPT or Gemini), or a reachable open-source model server (the open-source plan). Ways to offer free plans at no cost:
-- **On your own computer:** point the open-source plan at Ollama. Set `SWINGDESK_OSS_BASE_URL=http://localhost:11434/v1` and `SWINGDESK_OSS_MODEL=qwen3.5:9b`, and keep the Ollama app running. Checked 2026-11-23: Qwen 3.5 9B answered a question correctly through this plan, and the meter counted it.
+- **On your own computer:** point the open-source plan at Ollama. Set `SWINGDESK_OSS_BASE_URL=http://localhost:11434/v1` and list the models with `SWINGDESK_OSS_MODELS=gemma4:e2b,gemma4:12b,qwen3.5:4b` (users pick one in the Copilot tab), and keep the Ollama app running.
+  - **Small models that fit a 16 GB Mac** (checked 2026-11-23 on an M2): Google Gemma 4 E2B (about 20 s per answer, correct), Gemma 4 12B (about 47 s, correct), Qwen 3.5 4B and 9B.
+  - **Too big for 16 GB:** OpenAI gpt-oss 20B (13 GB) pushed free memory to about 5%, and macOS killed the API server. It isn't offered; use it only on a machine with 32 GB or more.
 - **On a host without a GPU (such as Render's free plan):** the server can't run a model itself, but two free services work:
   - **Google's Gemini API free tier:** a key from aistudio.google.com needs no billing. Set `GEMINI_API_KEY` and `SWINGDESK_FREE_TIER=on` to offer Free · Gemini. Google's free tier has rate limits, and Google may use free-tier prompts to improve its products.
   - **A hosted open-model service with a free tier**, such as Groq: set `SWINGDESK_OSS_BASE_URL` (Groq: `https://api.groq.com/openai/v1`), `SWINGDESK_OSS_MODEL` (a model from that service's list) and `SWINGDESK_OSS_API_KEY`.
@@ -312,6 +314,11 @@ Signing in only lets Tickmark read the account. Real-money trading needs that ac
 - **Colored stripes removed:** the thick colored stripes on cards are now tints or 1px borders.
 - **Narrow windows:** layout no longer scrolls sideways.
 - **Reduced motion:** honored.
+- **Motion:** tab and panel changes fade and slide in about 150 ms (Framer Motion, `motion` package). Off with the system's reduced-motion setting and in focus mode.
+- **Cursor:** an accent-colored pointer, a ring over buttons and links, and a crosshair over the chart. Switch it off in the brain menu in the top bar.
+- **Focus mode (ADHD-friendly):** brain menu in the top bar. Bigger text, the secondary bars hidden, inactive tabs dimmed, no animation, and one **Next step** at a time with a button that takes you there: save your rules, the kill switch, review a qualifying symbol, or "nothing qualifies". It also has a 25-minute focus timer.
+- **Background music:** in the same menu. Soft brown-noise rain and a slow chord pad, generated in the browser with Web Audio, so nothing is downloaded. Volume is remembered per browser.
+- **Watchlist prices:** in live mode the right-hand figure is the latest trade (Alpaca IEX feed), refreshed every minute, with the change against the previous close.
 
 ## P&L stats (Journal tab)
 
@@ -330,7 +337,7 @@ Run with `SWINGDESK_PORTAL=on` to serve Tickmark to several people:
 - **Sign-in:** email and password, hashed with scrypt. Sessions are 14-day HttpOnly, SameSite=Lax cookies.
 - **CSRF protection:** every change must carry the `X-SwingDesk` header.
 - **Lockout:** sign-in locks for 15 minutes after 5 failures.
-- **Sign-up:** the first account becomes the administrator. After that, people need an invite code from the Account tab (or set `SWINGDESK_OPEN_SIGNUP=on`).
+- **Sign-up:** the first account becomes the administrator. After that, sign-up is open to anyone when `SWINGDESK_OPEN_SIGNUP=on` (the Render blueprint's default); set it to `off` to require an invite code from the Account tab.
 - **Separate data per user:** each user gets their own folder (`data/users/<id>/`) holding their databases, settings, and an encrypted secret store (`secrets.enc`, Fernet). One user's broker and exchange keys, orders, journal, copilot key and history are never visible to another.
 - **Operator keys stay out:** the server's own environment-variable keys (Alpaca, Anthropic) are never used for portal users.
 - **Background jobs** run once per user: the daily refresh, planned exits, the day monitor, and crypto and broker sync. There's no order websocket in the portal; it polls every 30 s instead.
@@ -361,7 +368,7 @@ In the portal, each user's tokens reach only that user's desk. Users also pick t
 
 **Checked:** against the real local server, with the **official MCP Python client (mcp 2.3.0)**: initialize (protocol 2025-06-18), tools/list (17 tools) and a tool call all worked. The test token was revoked afterwards.
 
-## Hosting on Render (public, invite-only)
+## Hosting on Render (public, open sign-up)
 
 Live since 2026-11-23 at **https://tickmark-yqj2.onrender.com** (blueprint `tickmark`, service on the free plan). From the internet: TLS is valid, `/healthz` answers, signed-out API calls get 401, and a sign-up without the setup code is refused.
 
@@ -370,18 +377,25 @@ The repo includes a `Dockerfile` (it builds the web app, then serves the app and
 1. In Render, go to **New → Blueprint** and pick this repository. Render's GitHub app can read private repos once you allow it.
 2. Render builds the image and starts it with:
    - the multi-user portal on
-   - invite-only sign-up
+   - open sign-up (`SWINGDESK_OPEN_SIGNUP=on`; set `off` for invite-only)
    - Secure cookies
    - a generated `SWINGDESK_MASTER_KEY` (encrypts each user's keys)
    - a generated `SWINGDESK_SETUP_CODE`
 3. In the Render dashboard, open the service's **Environment** tab and copy `SWINGDESK_SETUP_CODE`. Open the site and create the administrator account with it. Without the code, nobody can claim the admin account, even with the public link.
-4. Invite people from the **Account** tab.
-5. Optional: add `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` and `SWINGDESK_FREE_TIER=on` in the dashboard to offer the free copilot plans. Never commit keys.
+4. Share the link. Anyone can create an account; invites from the **Account** tab still work if you turn open sign-up off.
+5. Optional, free copilot plans: as the admin, open **Account → Free AI plans** and paste the server's keys (Claude, OpenAI, Gemini, or a hosted open-model key such as Groq's), and switch the free tier on. Keys are checked before saving, stored encrypted, and never sent back to the browser. Environment variables in the Render dashboard (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `SWINGDESK_FREE_TIER=on`) still work and take priority. Never commit keys. Google AI Studio's Gemini key has a free tier, so it's the cheapest way to offer a free cloud plan.
+
+**Keeping data on the free plan (encrypted backup):** the free plan wipes the disk on every sleep or redeploy. Tickmark can back the whole data folder up to a private GitHub repo and restore it on startup:
+1. Create a **private** GitHub repo, for example `tickmark-data`.
+2. Create a fine-grained personal access token with **Contents: read and write** on that one repo only.
+3. In Render → tickmark → **Environment**, set `SWINGDESK_BACKUP_REPO` (`owner/tickmark-data`) and `SWINGDESK_BACKUP_TOKEN`.
+
+The snapshot is encrypted with `SWINGDESK_MASTER_KEY` before it leaves the server, so GitHub only stores ciphertext; keep the master key unchanged or the backup can't be read. A snapshot is pushed soon after every sign-up, at most once a minute after other changes, and on shutdown. If the instance is killed without a shutdown signal, up to about a minute of changes can be lost. On startup with an empty disk, the latest snapshot is restored before the app starts. Checked with a fake GitHub in tests (snapshot, encryption, restore, refusing unsafe paths); not yet run against the live service.
 
 **Free plan limits, before real clients rely on it:**
 - The instance **sleeps after ~15 minutes idle**; the first visit wakes it in about a minute.
 - Its **disk isn't persistent**, so accounts, journals and linked keys are **wiped on every redeploy or restart**.
-- Use a paid plan with a persistent disk mounted at `/app/data` (or another host with a volume) for anything you need to keep.
+- Turn on the encrypted backup above, or use a paid plan with a persistent disk mounted at `/app/data` (the local branch `render-disk-upgrade` has that blueprint, about $7.25/month, not deployed).
 
 **Checked locally:** the Docker image can't be built on this Mac (Docker isn't installed), so Render's build is the first real build. The second stage was reproduced instead: a fresh Python 3.13 environment with only `requirements.txt`, run with the same command and settings. Results:
 - the health check, the web app and its assets all load

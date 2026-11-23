@@ -4,6 +4,7 @@ import { api, ApiError, Status_ } from "../api";
 import type { Level } from "../App";
 import { money } from "./ui";
 import { AlertsBell } from "./AlertsDrawer";
+import { ComfortMenu, useComfort } from "./Comfort";
 
 function ago(iso: string) {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -19,8 +20,8 @@ const WS: { id: Workspace; label: string; hint: string; Icon: typeof FlaskConica
   { id: "trading", label: "Live trading", hint: "Real money, on accounts you switched on in the Broker tab.", Icon: CircleDot },
 ];
 
-export function TopBar({ status, level, setLevel, onChanged, notify, tick, openPalette, openConnections, openBroker }: {
-  status: Status_ | null; level: Level; setLevel: (l: Level) => void; onChanged: () => void; notify: (s: string) => void; tick: number;
+export function TopBar({ comfort, status, level, setLevel, onChanged, notify, tick, openPalette, openConnections, openBroker }: {
+  comfort: ReturnType<typeof useComfort>; status: Status_ | null; level: Level; setLevel: (l: Level) => void; onChanged: () => void; notify: (s: string) => void; tick: number;
   openPalette: () => void; openConnections: () => void; openBroker: () => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -102,6 +103,7 @@ export function TopBar({ status, level, setLevel, onChanged, notify, tick, openP
         </div>
         <button className="iconbtn" onClick={openConnections} title="Connections: brokers, exchanges and AI"><Plug size={16} aria-hidden /><span className="sr">Connections</span></button>
         <AlertsBell tick={tick} notify={notify} />
+        <ComfortMenu {...comfort} />
         <div className="seg" role="group" aria-label="Explanation level">
           {(["beginner", "analyst"] as Level[]).map((l) => (
             <button key={l} className={level === l ? "on" : ""} onClick={() => setLevel(l)}>{l === "beginner" ? "Beginner" : "Analyst"}</button>
