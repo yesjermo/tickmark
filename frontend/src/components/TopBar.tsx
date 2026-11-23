@@ -2,9 +2,10 @@ import { useState } from "react";
 import { CircleDot, Command as CmdIcon, FlaskConical, FastForward, Octagon, Plug, RefreshCw, RotateCcw, ShieldAlert, TestTube2 } from "lucide-react";
 import { api, ApiError, Status_ } from "../api";
 import type { Level } from "../App";
-import { money } from "./ui";
 import { AlertsBell } from "./AlertsDrawer";
 import { ComfortMenu, useComfort } from "./Comfort";
+import { Mark } from "./Mark";
+import { InstallApp } from "./InstallApp";
 
 function ago(iso: string) {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -84,7 +85,7 @@ export function TopBar({ comfort, status, level, setLevel, onChanged, notify, ti
   return (
     <header className={`topbar ws-${ws ?? "loading"}`}>
       <div className="tb-row">
-        <div className="brand"><span className="logo" aria-hidden>◢</span> Tickmark</div>
+        <div className="brand"><span className="logo"><Mark size={14} /></span> Tickmark</div>
 
         <nav className="workspaces" aria-label="Workspace">
           {WS.map(({ id, label, hint, Icon }) => (
@@ -97,13 +98,10 @@ export function TopBar({ comfort, status, level, setLevel, onChanged, notify, ti
 
         <div className="tb-spacer" />
         {status?.kill_switch?.on && <div className="kspill" title={status.kill_switch.reason ?? ""}><Octagon size={14} aria-hidden /> Kill switch on</div>}
-        <div className="acct" title={ws === "trading" ? "Equity of the live account" : "Paper account equity"}>
-          <span className="muted">{ws === "trading" ? "Live equity" : ws === "test" ? "Paper equity" : "Backtest equity"}</span>
-          <b className="num">{status ? money(status.account.equity) : "—"}</b>
-        </div>
         <button className="iconbtn" onClick={openConnections} title="Connections: brokers, exchanges and AI"><Plug size={16} aria-hidden /><span className="sr">Connections</span></button>
         <AlertsBell tick={tick} notify={notify} />
         <ComfortMenu {...comfort} />
+        <InstallApp notify={notify} />
         <div className="seg" role="group" aria-label="Explanation level">
           {(["beginner", "analyst"] as Level[]).map((l) => (
             <button key={l} className={level === l ? "on" : ""} onClick={() => setLevel(l)}>{l === "beginner" ? "Beginner" : "Analyst"}</button>

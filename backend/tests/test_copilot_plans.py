@@ -108,3 +108,39 @@ def test_free_open_plan_offers_several_models_and_users_pick(confirmed, monkeypa
     r = confirmed.post("/api/copilot/chat", json={"text": "y"}).json()
     assert seen == ["gemma4:12b", "gpt-oss:20b"] and r["model"] == "oss:gpt-oss:20b"
     assert confirmed.put("/api/copilot/settings", json={"model": "oss", "oss_model": "llama-secret"}).status_code == 400
+
+
+def test_snapshot_mode_for_models_that_cannot_call_tools(confirmed, monkeypatch):
+    """A pruned model (gpt-oss nano) gets the desk's real data in the prompt and no tools, so it can't guess or draft."""
+    monkeypatch.setenv("SWINGDESK_OSS_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("SWINGDESK_OSS_MODELS", "gemma4:e2b,gpt-oss-nano:6b")
+    sent = []
+
+    def handle(req):
+        sent.append(json.loads(req.content))
+        return httpx.Response(200, json=oa("NVDA shows no setup today."))
+    monkeypatch.setattr(copilot, "LOCAL_TRANSPORT", httpx.MockTransport(handle))
+    monkeypatch.setattr(copilot, "CLIENT_FACTORY", None)
+    oss = next(p for p in confirmed.get("/api/copilot").json()["plans"] if p["id"] == "oss")
+    assert oss["models"][1]["label"] == "OpenAI gpt-oss nano (pruned, snapshot mode) 6B"
+    confirmed.put("/api/copilot/settings", json={"model": "oss", "oss_model": "gpt-oss-nano:6b"})
+    r = confirmed.post("/api/copilot/chat", json={"text": "Does NVDA qualify?"}).json()
+    body = sent[-1]
+    assert "tools" not in body and "DATA (fetched just now" in body["messages"][0]["content"]
+    assert "get_symbol_evaluation" in body["messages"][0]["content"] and '"NVDA"' in body["messages"][0]["content"]
+    assert [s["tool"] for s in r["steps"]] == ["get_overview", "get_positions_and_orders", "get_symbol_evaluation"]
+    assert r["reply"].startswith("NVDA shows no setup today.") and "Snapshot mode" in r["reply"] and r["proposals"] == []
+
+
+def test_server_that_rejects_tools_falls_back_to_snapshot(confirmed, monkeypatch):
+    monkeypatch.setenv("SWINGDESK_OSS_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.setenv("SWINGDESK_OSS_MODEL", "some-tiny:1b")
+
+    def handle(req):
+        if "tools" in json.loads(req.content):
+            return httpx.Response(400, json={"error": {"message": "registry.ollama.ai/some-tiny:1b does not support tools"}})
+        return httpx.Response(200, json=oa("Answered from data."))
+    monkeypatch.setattr(copilot, "LOCAL_TRANSPORT", httpx.MockTransport(handle))
+    monkeypatch.setattr(copilot, "CLIENT_FACTORY", None)
+    r = confirmed.post("/api/copilot/chat", json={"text": "status?", "model": "oss"}).json()
+    assert r["reply"].startswith("Answered from data.") and "Snapshot mode" in r["reply"]

@@ -22,7 +22,9 @@ import { CommandMenu, PaletteAction } from "./components/CommandMenu";
 import { Toaster, toast as sonner } from "sonner";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { FocusStrip, useComfort } from "./components/Comfort";
-import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound } from "lucide-react";
+import { AccountCard } from "./components/AccountCard";
+import { Mark } from "./components/Mark";
+import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon } from "lucide-react";
 
 export type Level = "beginner" | "analyst";
 type CenterTab = "evidence" | "journal" | "forward" | "documents" | "day" | "crypto" | "connections";
@@ -116,6 +118,7 @@ function Desk({ user }: { user: PortalUser | null }) {
     documents: "Documents", day: "Day trading", crypto: "Crypto", connections: "Connections" };
   const CICON: Record<CenterTab, typeof Gauge> = { evidence: ListChecks, journal: BookOpen, forward: Timer, documents: FileText, day: CandlestickChart,
     crypto: Bitcoin, connections: Plug };
+  const SHORT: Record<CenterTab, string> = { evidence: "Evidence", journal: "Journal", forward: "Forward", documents: "Docs", day: "Day", crypto: "Crypto", connections: "Connect" };
   const SIDE: Record<SideTab, string> = { copilot: "Copilot", strategy: "Strategy", order: "Ticket", orders: "Orders", broker: "Broker", risk: "Risk",
     account: user ? "Account" : "AI apps" };
   const SICON: Record<SideTab, typeof Gauge> = { copilot: Bot, strategy: Target, order: ClipboardList, orders: BarChart3, broker: Briefcase,
@@ -142,18 +145,38 @@ function Desk({ user }: { user: PortalUser | null }) {
   return (
     <MotionConfig reducedMotion={comfort.focus ? "always" : "user"}>
     <div className="app">
+      <nav className="rail" aria-label="Sections">
+        <div className="rail-mark"><Mark size={16} /></div>
+        {(Object.keys(CENTER) as CenterTab[]).map((t) => {
+          const Icon = CICON[t];
+          return (
+            <button key={t} className={`rail-btn ${center === t ? "on" : ""}`} onClick={() => setCenter(t)} aria-current={center === t ? "page" : undefined}
+              aria-label={CENTER[t]} data-tip={CENTER[t]}>
+              <Icon size={18} strokeWidth={1.8} aria-hidden /><span className="rail-label">{SHORT[t]}</span>
+            </button>
+          );
+        })}
+        <span className="rail-spacer" />
+        <button className="rail-btn rail-theme" onClick={() => comfort.setTheme(comfort.theme === "light" ? "dark" : "light")}
+          aria-label={comfort.theme === "light" ? "Switch to dark theme" : "Switch to light theme"} data-tip={comfort.theme === "light" ? "Dark theme" : "Light theme"}>
+          {comfort.theme === "light" ? <Moon size={18} strokeWidth={1.8} aria-hidden /> : <Sun size={18} strokeWidth={1.8} aria-hidden />}
+          <span className="rail-label">Theme</span>
+        </button>
+      </nav>
+      <div className="shell">
       <TopBar comfort={comfort} status={status} level={level} setLevel={setLevel} onChanged={refresh} notify={setToast} tick={tick}
         openPalette={() => setPalette(true)} openConnections={() => setCenter("connections")} openBroker={() => setSide("broker")} />
       <CommandMenu open={palette} setOpen={setPalette} actions={actions} />
-      <Toaster theme="dark" position="bottom-right" closeButton toastOptions={{ className: "sd-toast" }} />
+      <Toaster theme={comfort.theme} position="bottom-right" closeButton toastOptions={{ className: "sd-toast" }} />
       {comfort.focus && <FocusStrip step={nextStep} onGo={"go" in nextStep ? nextStep.go : undefined} />}
       {screen && !screen.ruleset.version && !comfort.focus && (
         <div className="banner">
           Rules are an unconfirmed draft. Review the definitions in <b>Strategy</b> and save them as a version before placing paper trades.
         </div>
       )}
-      <div className="workspace">
+      <div className="workspace" key={comfort.theme}>
         <aside className="left">
+          <AccountCard status={status} />
           <Watchlist screen={screen} live={live} selected={selected} onChanged={refresh} notify={setToast}
             onSelect={(s) => { setSelected(s); setCenter("evidence"); }} />
         </aside>
@@ -164,16 +187,9 @@ function Desk({ user }: { user: PortalUser | null }) {
             <PriceChart symbol={ev?.symbol ?? selected} tick={tick} evaluation={ev} journal={journal} live={live} />
             {!ev && <div className="empty overlay">{screen?.needs_refresh ? "No live data yet. Click Refresh live data in the top bar." : "Loading…"}</div>}
           </section>
-          <nav className="tabs">
-            {(Object.keys(CENTER) as CenterTab[]).map((t) => {
-              const Icon = CICON[t];
-              return (
-                <button key={t} className={center === t ? "on" : ""} onClick={() => setCenter(t)} aria-current={center === t ? "page" : undefined}>
-                  <Icon size={14} aria-hidden /> {CENTER[t]}
-                </button>
-              );
-            })}
-          </nav>
+          <div className="center-head">
+            {(() => { const Icon = CICON[center]; return <h2><Icon size={16} aria-hidden /> {CENTER[center]}</h2>; })()}
+          </div>
           <AnimatePresence mode="wait" initial={false}>
             <motion.section key={center} className="center-body" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}>
@@ -222,6 +238,7 @@ function Desk({ user }: { user: PortalUser | null }) {
             </motion.div>
           </AnimatePresence>
         </aside>
+      </div>
       </div>
     </div>
     </MotionConfig>

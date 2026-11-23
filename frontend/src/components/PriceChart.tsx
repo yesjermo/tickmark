@@ -19,7 +19,7 @@ export function PriceChart({ symbol, tick, evaluation, journal, live }: { symbol
     if (!el.current) return;
     const c = createChart(el.current, {
       autoSize: true,
-      layout: { background: { color: "transparent" }, textColor: css("--muted"), fontFamily: "IBM Plex Mono, monospace", fontSize: 11 },
+      layout: { background: { color: "transparent" }, textColor: css("--muted"), fontFamily: "IBM Plex Mono, ui-monospace, monospace", fontSize: 11 },
       grid: { vertLines: { color: css("--grid") }, horzLines: { color: css("--grid") } },
       rightPriceScale: { borderColor: css("--line") },
       timeScale: { borderColor: css("--line") },

@@ -69,7 +69,7 @@ def config() -> dict:
     return out
 
 
-OPEN_MODEL_NAMES = {"gemma4": "Google Gemma 4", "gemma3": "Google Gemma 3", "gpt-oss": "OpenAI gpt-oss", "qwen3.5": "Qwen 3.5",
+OPEN_MODEL_NAMES = {"gpt-oss-nano": "OpenAI gpt-oss nano (pruned, snapshot mode)", "gemma4": "Google Gemma 4", "gemma3": "Google Gemma 3", "gpt-oss": "OpenAI gpt-oss", "qwen3.5": "Qwen 3.5",
                     "qwen3": "Qwen 3", "llama3.3": "Meta Llama 3.3", "llama4": "Meta Llama 4", "mistral": "Mistral", "deepseek-r1": "DeepSeek R1"}
 
 

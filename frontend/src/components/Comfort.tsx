@@ -11,9 +11,14 @@ function save(key: string, v: unknown) { try { localStorage.setItem("tickmark." 
 export function useComfort() {
   const [focus, setFocus] = useState<boolean>(() => pref("focus", false));
   const [cursor, setCursor] = useState<boolean>(() => pref("cursor", true));
+  const [theme, setTheme] = useState<"light" | "dark">(() => pref("theme", "light"));
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme; save("theme", theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#0f1214" : "#e4e2dd");
+  }, [theme]);
   useEffect(() => { document.body.classList.toggle("focus-mode", focus); save("focus", focus); }, [focus]);
   useEffect(() => { document.body.classList.toggle("tm-cursor", cursor); save("cursor", cursor); }, [cursor]);
-  return { focus, setFocus, cursor, setCursor };
+  return { focus, setFocus, cursor, setCursor, theme, setTheme };
 }
 
 /** Calm generated background sound (no audio files): a soft chord pad over filtered brown noise, via Web Audio. */
@@ -47,7 +52,7 @@ class Ambient {
   }
 }
 
-export function ComfortMenu({ focus, setFocus, cursor, setCursor }: ReturnType<typeof useComfort>) {
+export function ComfortMenu({ focus, setFocus, cursor, setCursor, theme, setTheme }: ReturnType<typeof useComfort>) {
   const [open, setOpen] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [vol, setVol] = useState<number>(() => pref("volume", 0.25));
@@ -82,6 +87,8 @@ export function ComfortMenu({ focus, setFocus, cursor, setCursor }: ReturnType<t
                 onChange={(e) => { const v = Number(e.target.value); setVol(v); save("volume", v); amb.current?.volume(v); }} />
             </div>
             <small className="muted">Generated in your browser: soft rain and a slow pad. Nothing is downloaded.</small>
+            <label className="opt"><input type="checkbox" checked={theme === "dark"} onChange={(e) => setTheme(e.target.checked ? "dark" : "light")} />
+              <span><b>Dark theme</b><small>Ink background for night use. Light warm stone is the default.</small></span></label>
             <label className="opt"><input type="checkbox" checked={cursor} onChange={(e) => setCursor(e.target.checked)} />
               <span><b><MousePointer2 size={13} aria-hidden /> Tickmark cursor</b><small>Accent-colored pointer, crosshair over charts.</small></span></label>
           </motion.div>

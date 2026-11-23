@@ -1489,4 +1489,9 @@ if DIST.exists():
     def spa(path: str):
         if path.startswith("api/"):   # unknown API routes must 404, never return the web page
             raise HTTPException(404, f"No such endpoint: /{path}")
-        return FileResponse(DIST / "index.html")
+        # Root files from frontend/public (app manifest, service worker, icons); only names at the top level, no traversal.
+        if path and "/" not in path and not path.startswith(".") and (DIST / path).is_file():
+            media = {"webmanifest": "application/manifest+json", "js": "text/javascript"}.get(path.rsplit(".", 1)[-1])
+            no_cache = {"Cache-Control": "no-cache"} if path == "sw.js" else None
+            return FileResponse(DIST / path, media_type=media, headers=no_cache)
+        return FileResponse(DIST / "index.html", headers={"Cache-Control": "no-cache"})

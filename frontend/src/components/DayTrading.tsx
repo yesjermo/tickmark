@@ -33,7 +33,7 @@ function DayChart({ symbol, tick }: { symbol: string; tick: number }) {
   useEffect(() => {
     if (!el.current) return;
     const chart = createChart(el.current, {
-      autoSize: true, layout: { background: { color: "transparent" }, textColor: css("--muted"), fontFamily: "IBM Plex Mono, monospace", fontSize: 11 },
+      autoSize: true, layout: { background: { color: "transparent" }, textColor: css("--muted"), fontFamily: "IBM Plex Mono, ui-monospace, monospace", fontSize: 11 },
       grid: { vertLines: { color: css("--grid") }, horzLines: { color: css("--grid") } },
       timeScale: { timeVisible: true, secondsVisible: false, borderColor: css("--line") }, rightPriceScale: { borderColor: css("--line") },
     });

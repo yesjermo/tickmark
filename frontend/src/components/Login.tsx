@@ -1,3 +1,4 @@
+import { Mark } from "./Mark";
 import { useState } from "react";
 import { api, ApiError } from "../api";
 
@@ -21,7 +22,7 @@ export function Login({ firstUser, openSignup, setupCode = false, onIn }: { firs
   return (
     <div className="login-wrap">
       <form className="card login" onSubmit={(e) => { e.preventDefault(); go(); }}>
-        <h1><span className="logo">◢</span> Tickmark</h1>
+        <h1><span className="logo"><Mark size={18} /></span> Tickmark</h1>
         <p className="muted small">{firstUser ? "Create the administrator account for this Tickmark server." :
           mode === "in" ? "Sign in to your desk." : openSignup ? "Create your account." : "Create your account with the invite code you were sent."}</p>
         <label>Email <input type="email" autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></label>

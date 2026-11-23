@@ -822,6 +822,57 @@ LOCAL_HINT = ("\n\nYou are running as a small local model. Call one tool at a ti
               "matching the schema, and keep the final answer short.")
 
 
+# Small or pruned models that can't call tools reliably (they describe the call instead of making it, or guess) run in
+# snapshot mode: the desk's real data is fetched first and handed to the model, which may only answer from it. No tools, so
+# nothing can be drafted. Extra models via SWINGDESK_SNAPSHOT_MODELS (comma-separated). Servers that reject tools outright
+# ("does not support tools") fall back to snapshot mode automatically.
+SNAPSHOT_MODELS = {"gpt-oss-nano:6b", "dedeprogames/gpt-oss-nano:6b"}
+SNAPSHOT_HINT = ("\n\nSNAPSHOT MODE: you cannot call tools. A DATA block with the desk's real state follows. Answer only from it, quote its "
+                 "numbers exactly, and if it doesn't contain the answer, say so plainly. You can't draft orders or rule changes in this mode; "
+                 "tell the user to switch to a full model for that.")
+
+
+def snapshot_mode(model: str) -> bool:
+    extra = {m.strip().lower() for m in os.environ.get("SWINGDESK_SNAPSHOT_MODELS", "").split(",") if m.strip()}
+    return (model or "").lower() in SNAPSHOT_MODELS | extra
+
+
+def _snapshot(question: str, thread_id: str, steps: list) -> str:
+    """The data a tool-using model would have fetched first: overview, positions, and evidence for symbols named in the question."""
+    import re
+    parts = []
+    def grab(name, args):
+        res, _ = run_tool(name, args, thread_id)
+        steps.append({"tool": name, "input": args, "ok": "error" not in res, "error": res.get("error")})
+        body = json.dumps(res, default=str)
+        parts.append(f"## {name} {json.dumps(args) if args else ''}\n{body[:12000]}")
+        return res
+    ov = grab("get_overview", {})
+    grab("get_positions_and_orders", {})
+    known = {str(r.get("symbol", "")).upper() for r in (ov.get("watchlist") or ov.get("screen") or []) if isinstance(r, dict)}
+    asked = [w for w in dict.fromkeys(re.findall(r"\b[A-Z]{1,5}\b", question.upper())) if w in known or (not known and len(w) >= 2)]
+    for sym in asked[:3]:
+        grab("get_symbol_evaluation", {"symbol": sym})
+    return "DATA (fetched just now from the desk):\n" + "\n\n".join(parts)
+
+
+def _snapshot_call(http, url, headers, s, messages, thread_id, steps, usage, who) -> str:
+    question = next((m.get("content") for m in reversed(messages) if m.get("role") == "user" and isinstance(m.get("content"), str)), "")
+    data = _snapshot(question, thread_id, steps)
+    sys_msg = {"role": "system", "content": SYSTEM + SNAPSHOT_HINT + "\n\n" + data}
+    convo = [m for m in messages if m.get("role") in ("user", "assistant") and not m.get("tool_calls")]
+    r = http.post(url, headers=headers, json={"model": s["local_model"], "messages": [sys_msg, *convo], "stream": False})
+    if r.status_code >= 400:
+        raise CopilotError(f"{who} error {r.status_code}: {r.text[:200]}", 502)
+    d = r.json()
+    u = d.get("usage") or {}
+    usage["input"] += u.get("prompt_tokens", 0) or 0
+    usage["output"] += u.get("completion_tokens", 0) or 0
+    text = _strip_think(((d.get("choices") or [{}])[0].get("message") or {}).get("content"))
+    messages.append({"role": "assistant", "content": text or ""})
+    return (text or f"({who} returned an empty answer.)") + "\n\n(Snapshot mode: answered from the desk data fetched above, without tools.)"
+
+
 def _strip_think(t: str | None) -> str:
     import re
     return re.sub(r"<think>.*?</think>", "", t or "", flags=re.S).strip()
@@ -864,6 +915,14 @@ def _local_loop(messages: list, thread_id: str, s: dict, api_key: str | None = N
     tools = GEMINI_TOOLS if provider == "gemini" else OPENAI_TOOLS
     transport = CLOUD_TRANSPORT if provider else LOCAL_TRANSPORT
     with httpx.Client(transport=transport, timeout=httpx.Timeout(600, connect=10)) as http:
+        if not provider and snapshot_mode(s["local_model"]):
+            try:
+                reply = _snapshot_call(http, url, headers, s, messages, thread_id, steps, usage, who)
+            except httpx.ConnectError:
+                raise CopilotError(f"No local model server at {s['local_base_url']}. Start Ollama (or LM Studio) and try again.", 502)
+            except httpx.TimeoutException:
+                raise CopilotError(f"{who} took too long to answer.", 504)
+            return {"reply": reply, "steps": steps, "proposals": proposals, "usage": usage}
         for _ in range(MAX_STEPS):
             try:
                 r = http.post(url, headers=headers, json={"model": s["local_model"], "messages": [sys_msg, *messages], "tools": tools, "stream": False})
@@ -883,6 +942,9 @@ def _local_loop(messages: list, thread_id: str, s: dict, api_key: str | None = N
                 if provider:
                     raise CopilotError(f"{who} doesn't offer '{s['local_model']}' to this key. Pick another model.", 502)
                 raise CopilotError(f"The local server doesn't have '{s['local_model']}'. Pull it first (e.g. ollama pull {s['local_model']}).", 502)
+            if r.status_code == 400 and not provider and "does not support tools" in r.text:
+                reply = _snapshot_call(http, url, headers, s, messages, thread_id, steps, usage, who)
+                break
             if r.status_code >= 400:
                 raise CopilotError(f"{who if provider else 'Local model server'} error {r.status_code}: {r.text[:200]}", 502)
             data = r.json()
