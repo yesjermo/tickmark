@@ -981,6 +981,8 @@ class CopilotSettingsIn(BaseModel):
     model: str
     local_base_url: str | None = None
     local_model: str | None = None
+    openai_model: str | None = None
+    gemini_model: str | None = None
 
 
 @app.get("/api/copilot")
@@ -1005,7 +1007,22 @@ def copilot_chat(body: CopilotChatIn):
 
 @app.put("/api/copilot/settings")
 def copilot_settings(body: CopilotSettingsIn):
-    return copilot_mod.save_settings(body.model, body.local_base_url, body.local_model)
+    return copilot_mod.save_settings(body.model, body.local_base_url, body.local_model, body.openai_model, body.gemini_model)
+
+
+@app.put("/api/copilot/providers/{provider}/key")
+def copilot_cloud_key(provider: str, body: CopilotKeyIn):
+    return copilot_mod.save_cloud_key(provider, body.key)
+
+
+@app.delete("/api/copilot/providers/{provider}/key")
+def copilot_cloud_key_delete(provider: str):
+    return copilot_mod.delete_cloud_key(provider)
+
+
+@app.get("/api/copilot/providers/{provider}/models")
+def copilot_cloud_models(provider: str):
+    return {"provider": provider, "models": copilot_mod.cloud_models(provider)}
 
 
 @app.get("/api/copilot/local-models")

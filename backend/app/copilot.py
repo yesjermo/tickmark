@@ -170,7 +170,70 @@ def delete_key() -> dict:
     return status()
 
 
-PLAN_CHOICES = ("free", "oss", "local")
+PLAN_CHOICES = ("free", "oss", "local", "openai", "gemini")
+
+# Other frontier models through their OpenAI-compatible chat endpoints, on the user's own key.
+# Model names change often, so the picker lists what the key can actually use (GET /models) instead of a fixed list.
+CLOUD = {
+    "openai": {"name": "OpenAI GPT", "base_url": "https://api.openai.com/v1", "key": "openai_api_key", "billed": "OpenAI",
+               "keys_at": "platform.openai.com → API keys"},
+    "gemini": {"name": "Google Gemini", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "key": "gemini_api_key",
+               "billed": "Google", "keys_at": "aistudio.google.com → Get API key"},
+}
+_SKIP = ("embedding", "tts", "whisper", "dall-e", "image", "audio", "realtime", "moderation", "transcribe", "search", "davinci",
+         "babbage", "aqa", "veo", "imagen", "live", "computer-use", "codex", "sora")
+CLOUD_TRANSPORT = None       # tests inject an httpx transport for the fake OpenAI / Gemini servers
+
+
+def _cloud_key(provider: str) -> str | None:
+    return credentials.get_secret(CLOUD[provider]["key"])
+
+
+def cloud_models(provider: str, key: str | None = None) -> list[str]:
+    """Chat models this key can use, newest names first (from the provider's own model list)."""
+    import httpx
+    if provider not in CLOUD:
+        raise CopilotError(f"Unknown provider '{provider}'.")
+    key = key or _cloud_key(provider)
+    if not key:
+        raise CopilotError(f"Add your {CLOUD[provider]['name']} API key first.", 409)
+    try:
+        with httpx.Client(transport=CLOUD_TRANSPORT, timeout=15) as c:
+            r = c.get(CLOUD[provider]["base_url"] + "/models", headers={"Authorization": f"Bearer {key}"})
+    except httpx.HTTPError as exc:
+        raise CopilotError(f"Couldn't reach {CLOUD[provider]['billed']}: {exc}"[:200], 502)
+    if r.status_code in (400, 401, 403):
+        raise CopilotError(f"{CLOUD[provider]['billed']} rejected that API key.", 400)
+    if r.status_code >= 400:
+        raise CopilotError(f"{CLOUD[provider]['billed']} error {r.status_code}: {r.text[:160]}", 502)
+    ids = [m.get("id", "").removeprefix("models/") for m in r.json().get("data", [])]
+    want = (lambda i: i.startswith(("gpt-", "o1", "o3", "o4", "o5", "chatgpt-"))) if provider == "openai" else (lambda i: i.startswith("gemini"))
+    import re
+
+    def rank(i: str):
+        m = re.search(r"(\d+(?:\.\d+)?)", i)
+        return (0 if i.startswith(("gpt-", "gemini")) else 1, -(float(m.group(1)) if m else 0), len(i), i)
+    return sorted({i for i in ids if i and want(i) and not any(x in i for x in _SKIP)}, key=rank)   # flagship, newest first
+
+
+def save_cloud_key(provider: str, key: str) -> dict:
+    key = (key or "").strip()
+    if not key:
+        raise CopilotError("Paste an API key.")
+    models = cloud_models(provider, key)          # checks the key with a free call before saving it
+    credentials.set_secret(CLOUD[provider]["key"], key)
+    s = settings()
+    if not s.get(f"{provider}_model") and models:
+        s[f"{provider}_model"] = models[0]
+        db.set_setting("copilot", s)
+    return status()
+
+
+def delete_cloud_key(provider: str) -> dict:
+    if provider not in CLOUD:
+        raise CopilotError(f"Unknown provider '{provider}'.")
+    credentials.set_secret(CLOUD[provider]["key"], None)
+    return status()
 
 
 def settings() -> dict:
@@ -189,12 +252,18 @@ def _is_loopback(url: str) -> bool:
     return (urlparse(url).hostname or "") in ("localhost", "127.0.0.1", "::1")
 
 
-def save_settings(model: str, local_base_url: str | None = None, local_model: str | None = None) -> dict:
+def save_settings(model: str, local_base_url: str | None = None, local_model: str | None = None,
+                  openai_model: str | None = None, gemini_model: str | None = None) -> dict:
     from urllib.parse import urlparse
     if model not in PLAN_CHOICES and model not in CLAUDE_MODELS:
         raise CopilotError(f"Unknown model '{model}'.")
     s = settings()
     s["model"] = model
+    for prov, val in (("openai", openai_model), ("gemini", gemini_model)):
+        if val is not None:
+            if not val.strip() or len(val) > 80:
+                raise CopilotError(f"Pick a {CLOUD[prov]['name']} model.")
+            s[f"{prov}_model"] = val.strip()
     if local_base_url is not None:
         u = local_base_url.strip().rstrip("/")
         if urlparse(u).scheme not in ("http", "https") or not urlparse(u).hostname:
@@ -231,15 +300,21 @@ def status() -> dict:
     from . import copilot_plans
     plans = copilot_plans.summary()
     pl = {p["id"]: p for p in plans}
+    cloud = {p: {"name": v["name"], "configured": bool(_cloud_key(p)), "key_hint": credentials.hint(_cloud_key(p)),
+                 "model": s.get(f"{p}_model"), "billed": v["billed"], "keys_at": v["keys_at"]} for p, v in CLOUD.items()}
     label = (CLAUDE_MODELS[s["model"]]["name"] + " · your key" if s["model"] in CLAUDE_MODELS else
              f"{pl['free']['name']} ({pl['free']['model']})" if s["model"] == "free" else
-             f"{pl['oss']['name']} ({pl['oss']['model']})" if s["model"] == "oss" else f"Local: {s['local_model']}")
-    ready = {"free": pl["free"]["enabled"], "oss": pl["oss"]["enabled"], "local": True}.get(s["model"], claude_ok)
+             f"{pl['oss']['name']} ({pl['oss']['model']})" if s["model"] == "oss" else
+             f"{CLOUD[s['model']]['name']}: {s.get(s['model'] + '_model') or 'pick a model'} · your key" if s["model"] in CLOUD else
+             f"Local: {s['local_model']}")
+    ready = {"free": pl["free"]["enabled"], "oss": pl["oss"]["enabled"], "local": True,
+             "openai": cloud["openai"]["configured"] and bool(cloud["openai"]["model"]),
+             "gemini": cloud["gemini"]["configured"] and bool(cloud["gemini"]["model"])}.get(s["model"], claude_ok)
     return {"configured": ready or claude_ok or pl["free"]["enabled"] or pl["oss"]["enabled"], "ready": ready, "claude_configured": claude_ok, "source": src,
             "key_hint": credentials.hint(k) if k else None, "model": s["model"], "effort": EFFORT, "plans": plans,
             "model_label": label,
             "settings": s, "local_loopback": _is_loopback(s["local_base_url"]),
-            "models": [{"id": k_, **v} for k_, v in CLAUDE_MODELS.items()]}
+            "models": [{"id": k_, **v} for k_, v in CLAUDE_MODELS.items()], "cloud": cloud}
 
 
 # ---------- read tools ----------
@@ -451,6 +526,8 @@ def p_risk(c, a, thread_id):
     from . import risk
     cur = risk.limits(c)
     changes = {ch["name"]: ch["value"] for ch in a["changes"]}
+    if isinstance(changes.get("restricted"), str):          # "AAPL, MSFT" from models that can only send text
+        changes["restricted"] = [x for x in changes["restricted"].replace(";", ",").split(",") if x.strip()]
     bad = [k for k in changes if k not in risk.DEFAULTS]
     if bad:
         raise CopilotError(f"Not risk limits: {', '.join(bad)}. Valid: {', '.join(risk.DEFAULTS)}")
@@ -595,7 +672,8 @@ def _save(thread_id: str, messages: list, title: str, model: str) -> None:
 
 
 def _family(model: str | None) -> str | None:
-    return None if not model else ("local" if model.startswith(("local:", "oss:")) else "claude")
+    """Conversation format: Claude's, or the OpenAI chat format shared by GPT, Gemini, open-source and local models."""
+    return None if not model else ("local" if model.startswith(("local:", "oss:", "openai:", "gemini:")) else "claude")
 
 
 def chat(text: str, thread_id: str | None = None, level: str = "beginner", model: str | None = None) -> dict:
@@ -611,12 +689,18 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
     cfg = copilot_plans.config()
     if choice in ("free", "oss"):
         copilot_plans.check(choice)
+    if choice in CLOUD:
+        if not _cloud_key(choice):
+            raise CopilotError(f"Add your {CLOUD[choice]['name']} API key in the Copilot tab first.", 409)
+        if not s.get(f"{choice}_model"):
+            raise CopilotError(f"Pick a {CLOUD[choice]['name']} model in the Copilot tab.", 409)
     model_id = {"local": f"local:{s['local_model']}", "oss": f"oss:{cfg['oss']['model']}",
-                "free": f"free:{cfg['free']['model']}"}.get(choice, choice)
+                "free": f"free:{cfg['free']['model']}", "openai": f"openai:{s.get('openai_model')}",
+                "gemini": f"gemini:{s.get('gemini_model')}"}.get(choice, choice)
     thread_id, messages, prev = _load(thread_id)
     if prev and _family(prev) != _family(model_id):
         raise CopilotError("This conversation used a different kind of model. Start a new conversation to switch "
-                           "between Claude and a local model.", 409)
+                           "between Claude and GPT, Gemini or a local model.", 409)
     if choice in CLAUDE_MODELS and not status()["claude_configured"]:
         raise CopilotError("Add your Anthropic API key in the Copilot tab, or pick the free or open-source plan.", 409)
     from . import intraday
@@ -626,6 +710,9 @@ def chat(text: str, thread_id: str | None = None, level: str = "beginner", model
         out = _local_loop(messages, thread_id, s)
     elif choice == "oss":
         out = _local_loop(messages, thread_id, {"local_base_url": cfg["oss"]["base_url"], "local_model": cfg["oss"]["model"]})
+    elif choice in CLOUD:
+        out = _local_loop(messages, thread_id, {"local_base_url": CLOUD[choice]["base_url"], "local_model": s[f"{choice}_model"]},
+                          api_key=_cloud_key(choice), provider=choice)
     elif choice == "free":
         out = _claude_loop(messages, thread_id, cfg["free"]["model"], operator=True)
     else:
@@ -718,23 +805,62 @@ def _strip_think(t: str | None) -> str:
     return re.sub(r"<think>.*?</think>", "", t or "", flags=re.S).strip()
 
 
-def _local_loop(messages: list, thread_id: str, s: dict) -> dict:
+def _gemini_schema(sch):
+    """Gemini's function declarations take an OpenAPI subset: no additionalProperties, and one type plus nullable
+    instead of a list of types."""
+    if isinstance(sch, list):
+        return [_gemini_schema(x) for x in sch]
+    if not isinstance(sch, dict):
+        return sch
+    out = {}
+    for k, v in sch.items():
+        if k == "additionalProperties":
+            continue
+        if k == "type" and isinstance(v, list):
+            types = [t for t in v if t != "null"]
+            out["type"] = types[0] if len(types) == 1 else "string"
+            if "null" in v:
+                out["nullable"] = True
+            continue
+        out[k] = _gemini_schema(v)
+    if out.get("type") == "string" and isinstance(sch.get("type"), list):
+        out.pop("items", None)              # a multi-type field became a plain string for Gemini
+    return out
+
+
+GEMINI_TOOLS = [{"type": "function", "function": {**t["function"], "parameters": _gemini_schema(t["function"]["parameters"])}}
+                for t in OPENAI_TOOLS]
+
+
+def _local_loop(messages: list, thread_id: str, s: dict, api_key: str | None = None, provider: str | None = None) -> dict:
     import httpx
     url = s["local_base_url"].rstrip("/") + "/chat/completions"
     steps, proposals, reply, usage = [], [], "", {"input": 0, "output": 0, "cache_read": 0}
-    sys_msg = {"role": "system", "content": SYSTEM + LOCAL_HINT}
-    with httpx.Client(transport=LOCAL_TRANSPORT, timeout=httpx.Timeout(600, connect=5)) as http:
+    sys_msg = {"role": "system", "content": SYSTEM + ("" if provider else LOCAL_HINT)}
+    who = CLOUD[provider]["billed"] if provider else "The local model"
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    tools = GEMINI_TOOLS if provider == "gemini" else OPENAI_TOOLS
+    transport = CLOUD_TRANSPORT if provider else LOCAL_TRANSPORT
+    with httpx.Client(transport=transport, timeout=httpx.Timeout(600, connect=10)) as http:
         for _ in range(MAX_STEPS):
             try:
-                r = http.post(url, json={"model": s["local_model"], "messages": [sys_msg, *messages], "tools": OPENAI_TOOLS, "stream": False})
+                r = http.post(url, headers=headers, json={"model": s["local_model"], "messages": [sys_msg, *messages], "tools": tools, "stream": False})
             except httpx.ConnectError:
+                if provider:
+                    raise CopilotError(f"Couldn't reach {who}. Check the internet connection.", 502)
                 raise CopilotError(f"No local model server at {s['local_base_url']}. Start Ollama (or LM Studio) and try again.", 502)
             except httpx.TimeoutException:
-                raise CopilotError("The local model took too long to answer.", 504)
+                raise CopilotError(f"{who} took too long to answer.", 504)
+            if provider and r.status_code in (401, 403):
+                raise CopilotError(f"{who} rejected the API key. Replace it in the Copilot tab.", 401)
+            if provider and r.status_code == 429:
+                raise CopilotError(f"{who} rate limit or quota reached; try again later or check your plan with {who}.", 429)
             if r.status_code == 404:
+                if provider:
+                    raise CopilotError(f"{who} doesn't offer '{s['local_model']}' to this key. Pick another model.", 502)
                 raise CopilotError(f"The local server doesn't have '{s['local_model']}'. Pull it first (e.g. ollama pull {s['local_model']}).", 502)
             if r.status_code >= 400:
-                raise CopilotError(f"Local model server error {r.status_code}: {r.text[:200]}", 502)
+                raise CopilotError(f"{who if provider else 'Local model server'} error {r.status_code}: {r.text[:200]}", 502)
             data = r.json()
             u = data.get("usage") or {}
             usage["input"] += u.get("prompt_tokens", 0) or 0
@@ -745,7 +871,7 @@ def _local_loop(messages: list, thread_id: str, s: dict) -> dict:
             messages.append({"role": "assistant", "content": msg.get("content") or "",
                              **({"tool_calls": calls} if calls else {})})
             if not calls:
-                reply = _strip_think(msg.get("content")) or "(The local model returned an empty answer.)"
+                reply = _strip_think(msg.get("content")) or f"({who} returned an empty answer.)"
                 break
             parsed = []
             for i, tc in enumerate(calls):

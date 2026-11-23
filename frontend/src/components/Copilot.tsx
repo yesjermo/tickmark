@@ -6,6 +6,7 @@ interface ModelInfo { id: string; name: string; price: string; note: string }
 interface Plan { id: string; name: string; enabled: boolean; used: number; limit: number; period: string; model: string; note: string }
 interface CopilotStatus { configured: boolean; ready?: boolean; plans?: Plan[]; claude_configured: boolean; source: string | null; key_hint: string | null; model: string;
   model_label: string; effort: string; local_loopback: boolean; models: ModelInfo[];
+  cloud?: Record<"openai" | "gemini", { name: string; configured: boolean; key_hint: string | null; model: string | null; billed: string; keys_at: string }>;
   settings: { model: string; local_base_url: string; local_model: string };
   threads: { id: string; title: string; model: string | null; updated_at: string }[] }
 interface LocalModels { reachable: boolean; base_url: string; models: string[]; loopback: boolean; error?: string }
@@ -14,6 +15,47 @@ interface LocalModels { reachable: boolean; base_url: string; models: string[]; 
 function Rich({ text }: { text: string }) {
   return <>{text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
     part.startsWith("**") && part.endsWith("**") && part.length > 4 ? <b key={i}>{part.slice(2, -2)}</b> : <span key={i}>{part}</span>)}</>;
+}
+
+function CloudProvider({ id, c, onSaved, notify }: { id: "openai" | "gemini"; c: NonNullable<CopilotStatus["cloud"]>["openai"];
+  onSaved: (s: CopilotStatus) => void; notify: (s: string) => void }) {
+  const [key, setKey] = useState("");
+  const [models, setModels] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setModels(null);
+    if (c.configured) api.get<{ models: string[] }>(`/api/copilot/providers/${id}/models`).then((r) => setModels(r.models)).catch((e) => notify((e as ApiError).message));
+  }, [id, c.configured]);
+  async function saveKey() {
+    setBusy(true);
+    try { onSaved(await api.put<CopilotStatus>(`/api/copilot/providers/${id}/key`, { key })); setKey(""); notify(`${c.name} key checked and saved.`); }
+    catch (e) { notify((e as ApiError).message); } finally { setBusy(false); }
+  }
+  async function pick(m: string) {
+    try { onSaved(await api.put<CopilotStatus>("/api/copilot/settings", { model: id, [`${id}_model`]: m })); } catch (e) { notify((e as ApiError).message); }
+  }
+  if (!c.configured) return (
+    <form className="col small" onSubmit={(e) => { e.preventDefault(); saveKey(); }}>
+      <p className="muted">Uses your own {c.name} API key ({c.keys_at}); {c.billed} bills you directly. Questions and the desk data the
+        copilot looks up are sent to {c.billed}. The same guardrails apply: it can only draft proposals.</p>
+      <input type="password" autoComplete="off" placeholder={`${c.name} API key`} value={key} onChange={(e) => setKey(e.target.value)} aria-label={`${c.name} API key`} />
+      <button className="btn small primary" disabled={busy || !key.trim()}>{busy ? "Checking…" : "Check and save key"}</button>
+    </form>
+  );
+  return (
+    <div className="col small">
+      <label>Model
+        {models ? (
+          <select value={c.model ?? ""} onChange={(e) => pick(e.target.value)}>
+            {!c.model && <option value="">Pick a model…</option>}
+            {models.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        ) : <span className="muted">Loading the models your key can use…</span>}
+      </label>
+      <span className="muted">Key {c.key_hint} · billed by {c.billed} ·{" "}
+        <button type="button" className="linkish" onClick={async () => { onSaved(await api.del<CopilotStatus>(`/api/copilot/providers/${id}/key`)); }}>remove key</button></span>
+    </div>
+  );
 }
 
 function ModelPicker({ st, onSaved, notify }: { st: CopilotStatus; onSaved: (s: CopilotStatus) => void; notify: (s: string) => void }) {
@@ -46,12 +88,19 @@ function ModelPicker({ st, onSaved, notify }: { st: CopilotStatus; onSaved: (s: 
           <optgroup label="Claude with your own Anthropic key (unlimited)">
             {st.models.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.price} per M tokens</option>)}
           </optgroup>
+          <optgroup label="Other AI providers (your own key)">
+            <option value="openai">OpenAI GPT{st.cloud?.openai.model ? `: ${st.cloud.openai.model}` : ""}{st.cloud?.openai.configured ? "" : " · add key"}</option>
+            <option value="gemini">Google Gemini{st.cloud?.gemini.model ? `: ${st.cloud.gemini.model}` : ""}{st.cloud?.gemini.configured ? "" : " · add key"}</option>
+          </optgroup>
           <optgroup label="Your own model server (free)">
             <option value="local">Local model: {st.settings.local_model}</option>
           </optgroup>
         </select>
       </label>
       {info && <p className="small muted">{info.note}{!st.claude_configured && " Add your key below to use it."}</p>}
+      {(st.model === "openai" || st.model === "gemini") && st.cloud && (
+        <CloudProvider id={st.model} c={st.cloud[st.model]} onSaved={onSaved} notify={notify} />
+      )}
       {plan && (
         <div className="usage" aria-label={`${plan.used} of ${plan.limit} messages used`}>
           <div className="usage-bar"><span style={{ width: `${Math.min(100, (plan.used / Math.max(1, plan.limit)) * 100)}%` }} /></div>
@@ -206,13 +255,15 @@ export function Copilot({ level, notify, onChanged, openTicket, openDay, openCry
       <ModelPicker st={st} onSaved={setSt} notify={notify} />
       <p className="small">Ask about your setups, positions and risk in plain English. It reads the desk through the same code the app
         uses, and can draft rule changes, risk limits, orders and exits. <b>Nothing happens until you apply or confirm it.</b></p>
-      <p className="small muted">Uses Claude ({st.model}) with your own Anthropic API key, billed by Anthropic per use. Questions and the desk
-        data the copilot looks up (watchlist, positions, journal, limits) are sent to Anthropic's API; broker keys are never sent.</p>
-      <form onSubmit={(e) => { e.preventDefault(); saveKey(); }} className="col">
-        <input type="password" autoComplete="off" placeholder="Anthropic API key (sk-ant-…)" value={key} onChange={(e) => setKey(e.target.value)} />
-        <button className="btn primary" disabled={busy || !key.trim()}>{busy ? "Checking…" : "Check and save key"}</button>
-      </form>
-      <p className="small muted">Stored in the system keychain, never shown again. Or set ANTHROPIC_API_KEY before starting the server.
+      {st.models.some((m) => m.id === st.model) && <>
+        <p className="small muted">Uses Claude ({st.models.find((m) => m.id === st.model)?.name}) with your own Anthropic API key, billed by Anthropic per use.
+          Questions and the desk data the copilot looks up (watchlist, positions, journal, limits) are sent to Anthropic's API; broker keys are never sent.</p>
+        <form onSubmit={(e) => { e.preventDefault(); saveKey(); }} className="col">
+          <input type="password" autoComplete="off" placeholder="Anthropic API key (sk-ant-…)" value={key} onChange={(e) => setKey(e.target.value)} />
+          <button className="btn primary" disabled={busy || !key.trim()}>{busy ? "Checking…" : "Check and save key"}</button>
+        </form>
+      </>}
+      <p className="small muted">Keys are stored in the system keychain (encrypted per user on a shared server) and never shown again.
         No key? Pick an included plan or a local model above.</p>
     </div>
   );

@@ -229,7 +229,16 @@ Like an IDE copilot, there's a free tier with a limit, a free open-source option
 | **Free · Claude** | the server operator's Anthropic key | `SWINGDESK_FREE_MESSAGES` per user per month (default 50) | `SWINGDESK_FREE_TIER=on` + `ANTHROPIC_API_KEY`; model `SWINGDESK_FREE_MODEL` (default claude-opus-5-5) |
 | **Open-source · free** | the operator hosts the model | fair use, `SWINGDESK_OSS_DAILY` per day (default 300) | `SWINGDESK_OSS_BASE_URL` (Ollama, vLLM, llama.cpp: any OpenAI-compatible server) + `SWINGDESK_OSS_MODEL` |
 | Claude, your own key | you, through Anthropic | unlimited | Copilot tab → paste key |
+| **OpenAI GPT**, your own key | you, through OpenAI | unlimited | Copilot tab → OpenAI GPT → paste key (platform.openai.com) |
+| **Google Gemini**, your own key | you, through Google | unlimited | Copilot tab → Google Gemini → paste key (aistudio.google.com) |
 | Your own local model | free, on your machine | unlimited | Copilot tab → Local model |
+
+**GPT and Gemini** run through each provider's OpenAI-compatible chat endpoint (`api.openai.com/v1`, and Gemini's `/v1beta/openai`), with the same tools and guardrails as Claude:
+- **Key check:** the key is checked with a free model-list call, then stored like the other keys.
+- **Model picker:** lists the chat models that key can actually use, so new model names appear without a code change. The newest flagship is selected by default.
+- **Gemini schemas:** Gemini receives the tool schemas converted to the subset it accepts (no `additionalProperties`, `nullable` instead of type lists).
+- **Switching models:** GPT, Gemini, open-source and local models share one conversation format, so you can switch between them mid-conversation; switching to or from Claude starts a new conversation.
+- **Testing so far:** tested against fake OpenAI and Gemini servers. Both real endpoints were confirmed reachable (they reject a missing or dummy key as expected), but no real GPT or Gemini call has been made, because that needs your key.
 
 A "message" is one question, however many lookups it takes. Usage is metered per user, in `portal.db`, and shown as a bar under the model picker. When the free allowance runs out, the copilot says when it resets and suggests the alternatives. With no key of their own, people start on whichever included plan the server offers.
 
@@ -558,7 +567,7 @@ Status logic: all hard rules pass → **Qualifies** (with a warning if earnings 
 
 | Integration | Status |
 |---|---|
-| FastAPI + SQLite backend, all endpoints | **Exercised** by 294 pytest tests and in the browser |
+| FastAPI + SQLite backend, all endpoints | **Exercised** by 298 pytest tests and in the browser |
 | Day trades on Alpaca Paper (bracket, flatten, day monitor) | **Tested against the fake Alpaca server**: bracket body (DAY, take-profit, stop), stop and target leg rows, target fill, stop fill, the monitor's flatten at 15:55 (and that it sends only one sell), canceling an unfilled entry, the critical alert after the close, manual flatten through the broker, swing exits skipping day trades, replay staying on the simulator, and the real-money block. In the real app the monitor thread starts, and a replay ticket (SNDK, 2026-11-20 09:50) showed its route; no order was sent. **No bracket has been placed on the real Alpaca paper API yet.** That needs market hours and a qualifying signal. |
 | Daily auto-refresh scheduler | **Exercised** by tests with a fake clock: next-run times including weekends and Thanksgiving, retries, skipping in demo mode or when off, and a scheduled 16:20 run that fills a paper order and advances the forward test. In the real server, the thread starts and reports its next run as Mon 2026-11-23 16:20 ET. **A real 16:20 run hasn't happened yet.** |
 | One-shot refresh CLI + cron | **Exercised**: installed in the user's crontab. A one-time test entry fired at 01:06 PST under cron and fetched real Yahoo data into `data/refresh.log`, so cron can reach `~/Documents`. The test entry was then removed. |

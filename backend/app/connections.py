@@ -69,6 +69,9 @@ def overview() -> dict:
            "methods": [*[{"kind": "plan", "label": p["name"], "available": p["enabled"], "connected": st["model"] == p["id"],
                           "detail": p["note"], "used": p["used"], "limit": p["limit"], "period": p["period"]} for p in st["plans"]],
                        {"kind": "api_key", "label": "Your Anthropic API key", "available": True, "connected": st["source"] == "keychain", "target": "anthropic"},
+                       *[{"kind": "api_key", "label": f"Your {c['name']} API key", "available": True, "connected": c["configured"],
+                          "target": "anthropic", "detail": f"billed by {c['billed']}" + (f" · {c['model']}" if c["model"] else "")}
+                         for c in st["cloud"].values()],
                        {"kind": "local", "label": "Your own local model (Ollama, LM Studio)", "available": True, "connected": st["model"] == "local"}]},
           {"id": "connectors", "name": "Claude and other AI apps", "group": "ai", "state": "available", "segment": "Use Tickmark inside your AI app",
            "assets": "Your Claude (or other) plan pays for the AI; Tickmark adds the tools",
