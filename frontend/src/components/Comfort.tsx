@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Brain, Music2, MousePointer2, Pause, Timer } from "lucide-react";
+import { Brain, Info, Music2, MousePointer2, Pause, Timer } from "lucide-react";
 
 /** Per-viewer preferences (browser storage): focus mode, custom cursor, music volume. */
 function pref<T>(key: string, fallback: T): T {
@@ -171,6 +171,8 @@ export function ComfortMenu({ focus, setFocus, cursor, setCursor, mode, setMode,
             <small className="muted">Generated in your browser: soft rain and a slow pad. Nothing is downloaded.</small>
             <label className="opt"><input type="checkbox" checked={cursor} onChange={(e) => setCursor(e.target.checked)} />
               <span><b><MousePointer2 size={13} aria-hidden /> Tickmark cursor</b><small>Accent-colored pointer, crosshair over charts.</small></span></label>
+            <button className="btn small pop-about" onClick={() => { setOpen(false); window.dispatchEvent(new Event("tickmark:about")); }}>
+              <Info size={13} aria-hidden /> About Tickmark</button>
           </motion.div>
         )}
       </AnimatePresence>

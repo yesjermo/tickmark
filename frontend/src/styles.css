@@ -1269,3 +1269,6 @@ button, a, select, label, [role=button] { touch-action: manipulation; -webkit-ta
 .splash-bar i { background: var(--text); }
 :root[data-theme="dark"] .splash-tile { background: var(--feature-2); }
 :root[data-theme="dark"] .splash-bar i { background: var(--signal); }
+/* About Tickmark: in the rail on desktop; on phones the bottom bar keeps to sections and it lives in the display menu (with Light/Dark) */
+.pop-about { justify-self: start; }
+@media (max-width: 760px) { .rail-about, .rail-theme { display: none; } }

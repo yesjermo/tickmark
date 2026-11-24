@@ -28,7 +28,7 @@ import { Mark } from "./components/Mark";
 import { TVChart, TVTape, openMyTradingView } from "./components/TradingView";
 import { Portfolio } from "./components/Portfolio";
 import { Splash, Welcome, welcomed } from "./components/Welcome";
-import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart, ExternalLink, LogIn, Ticket, Sparkles, NotebookPen } from "lucide-react";
+import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart, ExternalLink, Info, LogIn, Ticket, Sparkles, NotebookPen } from "lucide-react";
 
 export type Level = "beginner" | "analyst";
 type CenterTab = "portfolio" | "evidence" | "journal" | "forward" | "documents" | "day" | "crypto" | "connections";
@@ -45,6 +45,12 @@ export default function App() {
   const [authBox, setAuthBox] = useState<"in" | "up" | null>(null);
   // First visit (or /?welcome): the front page introduces the desk before a guest lands in it.
   const [intro, setIntro] = useState(() => new URLSearchParams(location.search).has("welcome") || !welcomed());
+  const [introAsked, setIntroAsked] = useState(() => new URLSearchParams(location.search).has("welcome"));   // About Tickmark, ?welcome
+  useEffect(() => {
+    const open = () => { setIntro(true); setIntroAsked(true); };
+    window.addEventListener("tickmark:about", open);
+    return () => window.removeEventListener("tickmark:about", open);
+  }, []);
   // Like any website: visitors land on the desk as a guest (real prices, paper trades kept on this browser), and sign in when they want.
   const inflight = useRef<Promise<void> | null>(null);
   const wasUser = useRef(false);
@@ -68,14 +74,15 @@ export default function App() {
     return () => { window.removeEventListener("swingdesk:signin", out); window.removeEventListener("swingdesk:signup", up); };
   }, []);
   if (!auth) return <Splash />;
-  const showIntro = intro && (auth.guest || new URLSearchParams(location.search).has("welcome"));
+  const showIntro = intro && (auth.guest || introAsked);
+  const signedIn = !!auth.user && auth.user.role !== "guest" && !auth.guest;
   if (auth.portal && !auth.user) return <Login firstUser={!!auth.first_user} openSignup={!!auth.open_signup} social={auth.social ?? []}
     onIn={(u) => setAuth({ ...auth, user: u, first_user: false })} />;
   return (
     <>
       <Desk adminUnclaimed={!!auth.admin_unclaimed} social={auth.social ?? []} user={auth.portal ? auth.user : null} key={`${auth.user?.id ?? "local"}:${auth.user?.role}`} guest={!!auth.guest} openAuth={setAuthBox} />
       <AnimatePresence>
-        {showIntro && <Welcome key="intro" guest={!!auth.guest} onEnter={() => setIntro(false)} onAuth={setAuthBox} />}
+        {showIntro && <Welcome key="intro" guest={!!auth.guest} signedIn={signedIn} onEnter={() => { setIntro(false); setIntroAsked(false); }} onAuth={setAuthBox} />}
       </AnimatePresence>
       <AnimatePresence>
         {authBox && <Login key="auth" firstUser={false} openSignup={!!auth.open_signup} social={auth.social ?? []} start={authBox} guest={!!auth.guest}
@@ -197,6 +204,7 @@ function Desk({ user, guest = false, openAuth, adminUnclaimed = false, social = 
     { id: "a-connect", group: "Actions", label: "Connect a broker, exchange or AI", icon: "plug", keywords: "sign in login oauth key", run: () => setCenter("connections") },
     { id: "a-level", group: "Actions", label: level === "beginner" ? "Switch to Analyst view" : "Switch to Beginner view", run: () => setLevel(level === "beginner" ? "analyst" : "beginner") },
     { id: "a-refresh", group: "Actions", label: "Reload panels", icon: "refresh", run: refresh },
+    { id: "a-about", group: "Actions", label: "About Tickmark", keywords: "welcome intro front page help what is", run: () => window.dispatchEvent(new Event("tickmark:about")) },
   ];
 
   // Focus mode shows one next step at a time.
@@ -232,6 +240,10 @@ function Desk({ user, guest = false, openAuth, adminUnclaimed = false, social = 
             <span className="rail-label">{guest ? "Sign in" : "Account"}</span>
           </button>
         )}
+        <button className="rail-btn rail-about" onClick={() => window.dispatchEvent(new Event("tickmark:about"))}
+          aria-label="About Tickmark" data-tip="About Tickmark">
+          <Info size={18} strokeWidth={1.8} aria-hidden /><span className="rail-label">About</span>
+        </button>
         <button className="rail-btn rail-theme" onClick={() => comfort.setTheme(comfort.theme === "light" ? "dark" : "light")}
           aria-label={comfort.theme === "light" ? "Switch to dark theme" : "Switch to light theme"} data-tip={comfort.theme === "light" ? "Dark theme" : "Light theme"}>
           {comfort.theme === "light" ? <Moon size={18} strokeWidth={1.8} aria-hidden /> : <Sun size={18} strokeWidth={1.8} aria-hidden />}

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { motion } from "motion/react";
 import { ArrowRight, Check, LogIn, X } from "lucide-react";
 import { Mark } from "./Mark";
@@ -64,15 +65,20 @@ function Preview() {
 }
 
 /** The front page a first-time visitor meets: what Tickmark is, then in (as a guest) or sign in / sign up. */
-export function Welcome({ onEnter, onAuth, guest }: { onEnter: () => void; onAuth: (m: "in" | "up") => void; guest: boolean }) {
+export function Welcome({ onEnter, onAuth, guest, signedIn = false }: { onEnter: () => void; onAuth: (m: "in" | "up") => void; guest: boolean; signedIn?: boolean }) {
   const enter = () => { markWelcomed(); onEnter(); };
+  useEffect(() => {   // Escape leaves the page for the desk (the sign-in dialog handles its own Escape first)
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector(".modal-scrim")) { markWelcomed(); onEnter(); } };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [onEnter]);
   const ease = [0.2, 0.8, 0.2, 1] as const;
   return (
     <motion.div className="welcome" initial={false} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }}>
       <header className="wl-top">
         <span className="wl-brand"><span className="wl-logo"><Mark size={15} /></span>Tickmark</span>
         <nav className="wl-nav">
-          <button className="btn ghost small" onClick={() => onAuth("in")}><LogIn size={14} aria-hidden /> Sign in</button>
+          {!signedIn && <button className="btn ghost small" onClick={() => onAuth("in")}><LogIn size={14} aria-hidden /> Sign in</button>}
           <button className="iconbtn wl-x" onClick={enter} aria-label="Skip the introduction and open the desk" title="Open the desk"><X size={16} aria-hidden /></button>
         </nav>
       </header>
@@ -82,10 +88,10 @@ export function Welcome({ onEnter, onAuth, guest }: { onEnter: () => void; onAut
           <p className="wl-lede">Tickmark turns the setup you describe into rules you can read, screens your watchlist on real prices,
             and records every trade in a journal that can't be rewritten. Nothing trades until you click.</p>
           <div className="wl-cta">
-            <button className="btn primary wl-go" onClick={enter}>{guest ? "Open the desk" : "Get started"} <ArrowRight size={16} aria-hidden /></button>
-            <button className="btn wl-up" onClick={() => onAuth("up")}>Create free account</button>
+            <button className="btn primary wl-go" onClick={enter}>{signedIn ? "Back to the desk" : guest ? "Open the desk" : "Get started"} <ArrowRight size={16} aria-hidden /></button>
+            {!signedIn && <button className="btn wl-up" onClick={() => onAuth("up")}>Create free account</button>}
           </div>
-          <p className="wl-fine">No account needed to look around: guests trade on paper with real prices, and signing up keeps it all.</p>
+          {!signedIn && <p className="wl-fine">No account needed to look around: guests trade on paper with real prices, and signing up keeps it all.</p>}
           <ol className="wl-steps">
             {STEPS.map((s) => (
               <li key={s.t}><Check size={15} strokeWidth={2.2} aria-hidden /><div><b>{s.t}</b><span>{s.d}</span></div></li>
