@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { ArrowRight, Check, LogIn, X } from "lucide-react";
 import { Mark } from "./Mark";
+import { useDialog } from "./theme";
 
 /** First paint while the session loads: the mark in its ink tile on the theme's canvas, nothing else to read. */
 export function Splash() {
@@ -18,7 +19,7 @@ export function Splash() {
 
 const KEY = "tickmark.welcomed";
 export const welcomed = () => { try { return localStorage.getItem(KEY) === "1"; } catch { return false; } };
-const markWelcomed = () => { try { localStorage.setItem(KEY, "1"); } catch { /* private mode: shows again next visit */ } };
+export const markWelcomed = () => { try { localStorage.setItem(KEY, "1"); } catch { /* private mode: shows again next visit */ } };
 
 const STEPS = [
   { t: "Say it in plain English", d: "Describe the setup you trade. The copilot drafts rules you can read, edit and save as a version." },
@@ -67,14 +68,18 @@ function Preview() {
 /** The front page a first-time visitor meets: what Tickmark is, then in (as a guest) or sign in / sign up. */
 export function Welcome({ onEnter, onAuth, guest, signedIn = false }: { onEnter: () => void; onAuth: (m: "in" | "up") => void; guest: boolean; signedIn?: boolean }) {
   const enter = () => { markWelcomed(); onEnter(); };
-  useEffect(() => {   // Escape leaves the page for the desk (the sign-in dialog handles its own Escape first)
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector(".modal-scrim")) { markWelcomed(); onEnter(); } };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [onEnter]);
+  const root = useRef<HTMLDivElement>(null);
+  // A full-screen page over the desk: focus starts here, Tab stays here, Escape opens the desk.
+  // The sign-in dialog opened from this page handles its own Escape and focus first.
+  useDialog(root, () => { if (!document.querySelector(".modal-scrim")) enter(); });
+  useEffect(() => {   // ⌘K / Ctrl K means "take me to the desk": close this page so the palette opens on top of the desk, not under it
+    const key = (e: KeyboardEvent) => { if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) enter(); };
+    window.addEventListener("keydown", key, true);
+    return () => window.removeEventListener("keydown", key, true);
+  });
   const ease = [0.2, 0.8, 0.2, 1] as const;
   return (
-    <motion.div className="welcome" initial={false} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }}>
+    <motion.div ref={root} className="welcome" role="dialog" aria-modal="true" aria-label="About Tickmark" initial={false} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }}>
       <header className="wl-top">
         <span className="wl-brand"><span className="wl-logo"><Mark size={15} /></span>Tickmark</span>
         <nav className="wl-nav">

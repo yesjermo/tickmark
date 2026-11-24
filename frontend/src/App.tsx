@@ -27,7 +27,7 @@ import { AccountCard } from "./components/AccountCard";
 import { Mark } from "./components/Mark";
 import { TVChart, TVTape, openMyTradingView } from "./components/TradingView";
 import { Portfolio } from "./components/Portfolio";
-import { Splash, Welcome, welcomed } from "./components/Welcome";
+import { Splash, Welcome, markWelcomed, welcomed } from "./components/Welcome";
 import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart, ExternalLink, Info, LogIn, Ticket, Sparkles, NotebookPen } from "lucide-react";
 
 export type Level = "beginner" | "analyst";
@@ -76,18 +76,27 @@ export default function App() {
   if (!auth) return <Splash />;
   const showIntro = intro && (auth.guest || introAsked);
   const signedIn = !!auth.user && auth.user.role !== "guest" && !auth.guest;
+  // The front page and sign-in sit outside the Desk's MotionConfig: honour the OS setting, Motion Off and focus mode here too.
+  const reduceMotion = document.documentElement.dataset.motion === "off" || document.body.classList.contains("focus-mode") ? "always" : "user";
+  const closeIntro = () => {
+    setIntro(false); setIntroAsked(false);
+    const q = new URLSearchParams(location.search);   // a /?welcome link opens the page once, not on every reload
+    if (q.has("welcome")) { q.delete("welcome"); history.replaceState(null, "", location.pathname + (q.toString() ? `?${q}` : "") + location.hash); }
+  };
   if (auth.portal && !auth.user) return <Login firstUser={!!auth.first_user} openSignup={!!auth.open_signup} social={auth.social ?? []}
     onIn={(u) => setAuth({ ...auth, user: u, first_user: false })} />;
   return (
     <>
       <Desk adminUnclaimed={!!auth.admin_unclaimed} social={auth.social ?? []} user={auth.portal ? auth.user : null} key={`${auth.user?.id ?? "local"}:${auth.user?.role}`} guest={!!auth.guest} openAuth={setAuthBox} />
-      <AnimatePresence>
-        {showIntro && <Welcome key="intro" guest={!!auth.guest} signedIn={signedIn} onEnter={() => { setIntro(false); setIntroAsked(false); }} onAuth={setAuthBox} />}
-      </AnimatePresence>
-      <AnimatePresence>
-        {authBox && <Login key="auth" firstUser={false} openSignup={!!auth.open_signup} social={auth.social ?? []} start={authBox} guest={!!auth.guest}
-          onClose={() => setAuthBox(null)} onIn={() => { setAuthBox(null); setIntro(false); load(); }} />}
-      </AnimatePresence>
+      <MotionConfig reducedMotion={reduceMotion}>
+        <AnimatePresence>
+          {showIntro && <Welcome key="intro" guest={!!auth.guest} signedIn={signedIn} onEnter={closeIntro} onAuth={setAuthBox} />}
+        </AnimatePresence>
+        <AnimatePresence>
+          {authBox && <Login key="auth" firstUser={false} openSignup={!!auth.open_signup} social={auth.social ?? []} start={authBox} guest={!!auth.guest}
+            onClose={() => setAuthBox(null)} onIn={() => { setAuthBox(null); if (showIntro) { markWelcomed(); closeIntro(); } load(); }} />}
+        </AnimatePresence>
+      </MotionConfig>
     </>
   );
 }
