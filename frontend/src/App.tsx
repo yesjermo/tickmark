@@ -316,7 +316,7 @@ function Desk({ user, guest = false, openAuth, adminUnclaimed = false, social = 
               return (
                 <button key={t} className={`${side === t ? "on" : ""} ${flag ? "flag" : ""}`} onClick={() => setSide(t)} title={SIDE[t]}
                   aria-current={side === t ? "page" : undefined}>
-                  <Icon size={14} aria-hidden /> <span className="tab-label">{SIDE[t]}</span>{n > 0 && <span className="count">{n}</span>}
+                  <Icon size={14} aria-hidden /><span className="tab-label">{SIDE[t]}</span>{n > 0 && <span className="count">{n}</span>}
                   {flag && <span className="flagdot" aria-label="needs attention" />}
                 </button>
               );

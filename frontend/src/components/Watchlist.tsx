@@ -35,7 +35,7 @@ export function Watchlist({ screen, live, selected, onSelect, onChanged, notify 
   return (
     <div>
       <div className="section-head">
-        <h2>Watchlist</h2>
+        <h2>Watchlist <span className="count num">{screen.results.length}</span></h2>
         <span className="muted small">rules {screen.ruleset.version ? `v${screen.ruleset.version}` : "draft"}</span>
       </div>
       {live && (

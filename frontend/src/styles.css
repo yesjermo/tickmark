@@ -1067,40 +1067,110 @@ button, a, select, label, [role=button] { touch-action: manipulation; -webkit-ta
 .chart-card, .center-body, .left .card, .right .card, .center-body .card { border-radius: var(--card-r); }
 .pf-block { border-radius: var(--card-r); background: var(--panel-2); }
 
-/* portfolio: black balance card + quick-action tiles */
-.pf-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); gap: 14px; align-items: stretch; }
-.pf-top.solo { grid-template-columns: minmax(0, 1fr); }
-.pf-hero { border-radius: var(--card-r); background: var(--feature); box-shadow: var(--lift); }
-.pf-v { font-weight: 600; letter-spacing: -0.03em; }
-.pf-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; border-radius: var(--card-r); background: var(--panel-2); }
-.pf-action { display: grid; justify-items: start; align-content: space-between; gap: 10px; min-height: 92px; padding: 12px; text-align: left;
-  border: 0; border-radius: var(--tile-r); background: var(--panel); color: var(--text); cursor: pointer;
-  transition: transform .14s var(--ease), box-shadow .18s var(--ease), background-color .16s var(--ease); }
-.pf-action:hover { box-shadow: var(--lift); transform: translateY(-1px); }
-.pf-action:active { transform: scale(.98); }
-.pf-action:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.pf-action-ic { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: var(--signal); color: var(--on-signal); }
-.pf-action-t { font-weight: 600; font-size: 13.5px; line-height: 1.2; }
-.pf-action-h { font-size: 11.5px; color: var(--muted); line-height: 1.3; margin-top: -8px; }
-
 /* allocation: lime fill in an ink track, like a limit meter */
 .alloc-track { height: 12px; border-radius: 999px; background: var(--feature); padding: 2px; }
 .alloc-bar { border-radius: 999px; background: var(--signal); }
-
-/* narrow column: the tiles become one compact row so the value chart keeps its room */
-@container (max-width: 760px) {
-  .pf-top { grid-template-columns: 1fr; }
-  .pf-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px; gap: 6px; }
-  .pf-action { min-height: 0; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 7px 8px; }
-  .pf-action-ic { width: 28px; height: 28px; } .pf-action-ic svg { width: 15px; height: 15px; }
-  .pf-action-t { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pf-action-h { display: none; }
-}
-@container (max-width: 460px) { .pf-actions { grid-template-columns: 1fr 1fr; } }
 .pf-graph { overflow: hidden; }
-:root[data-motion="off"] .pf-action:hover { transform: none; }
 /* phone bottom bar: icon + label tabs, so the lime "here" mark is a rounded tab, not a circle */
 @media (max-width: 760px) {
   .rail-btn { border-radius: 12px; }
   .rail-btn.on { box-shadow: none; }
 }
+
+/* ================= Desk layer (Figma mockup "Tickmark desk redesign") =================
+   Blocks sit straight on the stone canvas, one surface each; the balance card carries the quick actions;
+   KPIs get their own hairline strip; the selected watchlist row is ink like the rail; side tabs keep their words. */
+:root { --hair: var(--line); --on-feature-up: #b0d196; --on-feature-down: #f3aa80; }
+:root[data-palette]:not([data-palette="stone"]) { --on-feature-up: color-mix(in srgb, var(--up) 60%, var(--feature-fg)); --on-feature-down: color-mix(in srgb, var(--down) 60%, var(--feature-fg)); }
+
+/* top bar: the context row reads as a status line, its selects as quiet inline values */
+.tb-context { gap: 6px 18px; font-size: 12px; }
+.tb-context .ctx-k { font-size: 12px; }
+.tb-context .ctx select { background: transparent; border: 0; padding: 2px 4px; margin-left: -4px; font-weight: 500; color: var(--text); font-size: 12px; cursor: pointer; width: auto; }
+.tb-context .ctx select:hover { background: var(--panel); }
+.tb-context .ctx b.num { font-weight: 500; font-size: 12px; }
+.tb-context .btn.small { border-radius: 999px; border-color: transparent; background: var(--panel); padding: 4px 11px; }
+.tb-context .btn.small:hover:not(:disabled) { border-color: var(--line-2); }
+.tb-context .btn.ghost { background: transparent; }
+.streampill { border-radius: 999px; border: 0; padding: 3px 10px; font-family: "Hanken Grotesk", sans-serif; font-weight: 500; font-size: 11.5px; }
+.streampill.on { background: var(--pos-bg); color: var(--pos-fg); } .streampill.off { background: var(--warn-bg); color: var(--warn-fg); }
+.streampill .dot { width: 6px; height: 6px; }
+.workspaces .ws.on.ws-btn-test { background: var(--warn-bg); color: var(--warn-fg); }
+
+/* watchlist: count badge, pill input, ink selection */
+.section-head { padding: 14px 16px 8px; align-items: center; }
+.section-head h2 { gap: 8px; }
+.section-head .count { font: 500 11px "IBM Plex Mono", monospace; color: var(--muted); background: var(--panel-2); border-radius: 999px; padding: 1px 7px; }
+.addsym { padding: 0 10px 10px; gap: 0; position: relative; }
+.addsym input { border-radius: 999px; background: var(--panel-2); border-color: transparent; padding: 7px 64px 7px 12px; font-size: 12.5px; }
+.addsym input:focus { background: var(--panel); }
+.addsym .btn { position: absolute; right: 14px; top: 4px; border-radius: 999px; border-color: transparent; background: var(--panel); padding: 3px 12px; }
+.watch { padding: 0 10px; }
+.watch button { border-radius: 12px; padding: 10px 12px; margin-bottom: 2px; }
+.watch button:hover:not(.on) { background: var(--panel-2); }
+.watch .row1 b { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.watch .row1 .num { font-weight: 500; }
+.watch .chip.st-NO_SETUP { background: var(--panel-2); color: var(--muted); }
+.watch button.on { background: var(--feature); color: var(--feature-fg); border-color: transparent; }
+.watch button.on .row1 .num, .watch button.on .row1 b { color: var(--feature-fg); }
+.watch button.on .chip.st-NO_SETUP { background: var(--feature-2); color: var(--feature-muted); }
+.watch button.on .gain { color: var(--on-feature-up); } .watch button.on .loss { color: var(--on-feature-down); }
+.watch button.on .why, .watch button.on .dq { color: var(--feature-muted); }
+.watch li:has(button.on) .rm { color: var(--feature-muted); }
+.watch li:has(button.on) .rm:hover { background: var(--feature-2); color: var(--feature-fg); }
+.legend { padding: 8px 16px 4px; }
+
+/* side panel: worded pill tabs that wrap instead of collapsing to bare icons */
+.right .tabs { flex-wrap: wrap; gap: 6px; padding: 14px 14px 12px; border-bottom: 1px solid var(--line); overflow: visible; }
+.right .tabs button { padding: 6px 12px; border-radius: 999px; border: 0; background: var(--panel-2); color: var(--muted); font-size: 12.5px; font-weight: 500; }
+.right .tabs button svg { display: none; }
+.right .tabs button:hover:not(.on) { color: var(--text); background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); }
+.right .tabs button.on { background: var(--text); color: var(--panel); }
+.right .tabs button.on .count { background: var(--panel); color: var(--text); border-color: transparent; }
+.right .tabs .tab-label { display: inline !important; }
+.right .tabs .flagdot { top: 2px; right: 2px; box-shadow: 0 0 0 2px var(--panel); }
+.side-body { padding-top: 14px; }
+
+/* portfolio: blocks straight on the canvas (no card in a card) */
+.center-body:has(> .portfolio) { background: transparent; padding: 0 !important; border-radius: 0; }
+.portfolio { padding-top: 0 !important; gap: 12px; }
+.pf-block { background: var(--panel); padding: 16px 20px; }
+.pf-block-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.pf-block-h h3 { margin: 0; }
+.pf-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 20px 16px 16px 24px !important; align-items: stretch; }
+.pf-hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px 16px; flex-wrap: wrap; }
+.pf-v { font-size: clamp(32px, 3.2vw, 44px); letter-spacing: -0.03em; margin: 6px 0 6px; }
+.pf-d.gain { color: var(--on-feature-up); } .pf-d.loss { color: var(--on-feature-down); }
+.pf-tag { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; background: var(--feature-2); color: var(--feature-fg); font-size: 11.5px; white-space: nowrap; }
+.pf-tag i { width: 6px; height: 6px; border-radius: 50%; background: var(--signal); }
+.pf-tag.ws-backtest i { background: var(--ws-backtest); } .pf-tag.ws-trading i { background: var(--ws-trading); }
+.pf-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 0; background: none; border-radius: 0; }
+.pf-action { display: flex; align-items: center; gap: 10px; min-height: 0; padding: 10px 12px 10px 10px; border: 0; border-radius: 12px; text-align: left;
+  background: var(--feature-2); color: var(--feature-fg); cursor: pointer; transition: background-color .16s var(--ease), transform .14s var(--ease); }
+.pf-action:hover { background: color-mix(in srgb, var(--feature-fg) 12%, var(--feature)); box-shadow: none; transform: none; }
+.pf-action:active { transform: scale(.98); }
+.pf-action:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.pf-action-ic { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 999px; background: var(--signal); color: var(--on-signal); }
+.pf-action-tx { display: grid; gap: 1px; min-width: 0; }
+.pf-action-t { font-weight: 600; font-size: 13px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-action-h { font-size: 11px; color: var(--feature-muted); line-height: 1.3; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--hair); border-radius: var(--card-r); overflow: hidden; }
+.pf-kpis > div { background: var(--panel); padding: 11px 16px 12px; min-width: 0; }
+.pf-kpis dt { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-kpis dd { margin: 3px 0 0; font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eq-dot { stroke: var(--panel); }
+@container (max-width: 900px) { .pf-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (max-width: 760px) { .pf-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pf-hero { padding: 16px 12px 12px 18px !important; } }
+@container (max-width: 460px) { .pf-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pf-action-h { display: none; } .pf-action { padding: 8px; gap: 8px; } .pf-action-ic { width: 28px; height: 28px; } }
+@media (min-width: 1101px) and (min-height: 640px) {
+  .portfolio { grid-template-rows: auto auto minmax(190px, 1fr) auto; }
+  .center-body:has(> .portfolio) { padding-bottom: 0 !important; }
+}
+@media (min-width: 1101px) { .workspace { grid-template-columns: 256px minmax(0, 1fr) 364px; } }
+@media (min-width: 1700px) { .workspace { grid-template-columns: 284px minmax(0, 1fr) 400px; } }
+@container (max-width: 900px) { .pf-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); } .pf-kpis > div { padding-inline: 12px; } .pf-kpis dd { font-size: 14px; } }
+@container (max-width: 680px) { .pf-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (max-width: 760px) { .pf-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (max-width: 600px) { .pf-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 460px) { .pf-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1101px) and (max-height: 860px) { .pf-kpis > div { padding-block: 8px 9px; } .pf-hero { gap: 14px; padding-top: 16px !important; } }

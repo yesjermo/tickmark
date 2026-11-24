@@ -15,6 +15,7 @@ interface P {
 const usd = (n: number, d = 2) => n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 const signed = (n: number) => `${n >= 0 ? "+" : "−"}${usd(Math.abs(n))}`;
 const WS: Record<string, string> = { backtest: "Backtest account", test: "Paper account (live prices)", trading: "Live account" };
+const TAG: Record<string, string> = { backtest: "Backtest · simulated", test: "Paper · live prices", trading: "Live · real money" };
 
 /** Total value over time: one series, area + 2px line, crosshair and tooltip on hover. */
 function EquityChart({ hist }: { hist: Hist[] }) {
@@ -95,40 +96,41 @@ export function Portfolio({ tick, notify, actions = [] }: { tick: number; notify
   const unreal = p.positions.reduce((s, x) => s + (x.unrealized ?? 0), 0);
   return (
     <div className="portfolio">
-      <div className={`pf-top ${actions.length ? "" : "solo"}`}>
-      <section className="pf-hero">
-        <div>
-          <span className="pf-k">Total balance · {WS[p.workspace] ?? "Account"}{p.linked_usd ? " + linked accounts" : ""}</span>
-          <div className="pf-v num">{usd(p.total_usd)}<span>USD</span></div>
-          <span className={`pf-d num ${p.change > 0 ? "gain" : p.change < 0 ? "loss" : ""}`}>
-            {signed(p.change)}{p.change_pct != null && ` (${p.change_pct >= 0 ? "+" : "−"}${Math.abs(p.change_pct).toFixed(2)}%)`}<em> since start</em></span>
+      <section className="pf-hero" aria-label="Total balance">
+        <div className="pf-hero-top">
+          <div>
+            <span className="pf-k">Total balance · {WS[p.workspace] ?? "Account"}{p.linked_usd ? " + linked accounts" : ""}</span>
+            <div className="pf-v num">{usd(p.total_usd)}<span>USD</span></div>
+            <span className={`pf-d num ${p.change > 0 ? "gain" : p.change < 0 ? "loss" : ""}`}>
+              {signed(p.change)}{p.change_pct != null && ` (${p.change_pct >= 0 ? "+" : "−"}${Math.abs(p.change_pct).toFixed(2)}%)`}<em> since start</em></span>
+          </div>
+          <span className={`pf-tag ws-${p.workspace}`}><i aria-hidden />{TAG[p.workspace] ?? "Account"}</span>
         </div>
-        <dl className="pf-stats">
-          <div><dt>Cash</dt><dd className="num">{usd(p.trading.cash)}</dd></div>
-          <div><dt>Buying power</dt><dd className="num">{usd(p.trading.buying_power)}</dd></div>
-          <div><dt>Unrealized P&amp;L</dt><dd className={`num ${unreal > 0 ? "gain" : unreal < 0 ? "loss" : ""}`}>{signed(unreal)}</dd></div>
-          <div><dt>Realized P&amp;L</dt><dd className="num">{p.realized ? signed(p.realized.realized_pnl) : "—"}</dd></div>
-          <div><dt>Win rate</dt><dd className="num">{p.realized?.win_rate_pct != null ? `${p.realized.win_rate_pct}%` : "—"}</dd></div>
-          <div><dt>Closed trades</dt><dd className="num">{p.realized?.closed ?? 0}</dd></div>
-        </dl>
+        {actions.length > 0 && (
+          <nav className="pf-actions" aria-label="Quick actions">
+            {actions.map(({ label, hint, icon: Icon, run }) => (
+              <button key={label} type="button" className="pf-action" onClick={run}>
+                <span className="pf-action-ic"><Icon size={17} strokeWidth={1.8} aria-hidden /></span>
+                <span className="pf-action-tx"><span className="pf-action-t">{label}</span><span className="pf-action-h">{hint}</span></span>
+              </button>
+            ))}
+          </nav>
+        )}
       </section>
-      {actions.length > 0 && (
-        <nav className="pf-actions" aria-label="Quick actions">
-          {actions.map(({ label, hint, icon: Icon, run }) => (
-            <button key={label} type="button" className="pf-action" onClick={run}>
-              <span className="pf-action-ic"><Icon size={18} strokeWidth={1.8} aria-hidden /></span>
-              <span className="pf-action-t">{label}</span>
-              <span className="pf-action-h">{hint}</span>
-            </button>
-          ))}
-        </nav>
-      )}
-      </div>
+
+      <dl className="pf-kpis">
+        <div><dt>Cash</dt><dd className="num">{usd(p.trading.cash)}</dd></div>
+        <div><dt>Buying power</dt><dd className="num">{usd(p.trading.buying_power)}</dd></div>
+        <div><dt>Unrealized P&amp;L</dt><dd className={`num ${unreal > 0 ? "gain" : unreal < 0 ? "loss" : ""}`}>{signed(unreal)}</dd></div>
+        <div><dt>Realized P&amp;L</dt><dd className={`num ${(p.realized?.realized_pnl ?? 0) > 0 ? "gain" : (p.realized?.realized_pnl ?? 0) < 0 ? "loss" : ""}`}>{p.realized ? signed(p.realized.realized_pnl) : "—"}</dd></div>
+        <div><dt>Win rate</dt><dd className="num">{p.realized?.win_rate_pct != null ? `${p.realized.win_rate_pct}%` : "—"}</dd></div>
+        <div><dt>Closed trades</dt><dd className="num">{p.realized?.closed ?? 0}</dd></div>
+      </dl>
 
       <section className="pf-block pf-graph">
-        <h3>Total value over time</h3>
+        <div className="pf-block-h"><h3>Total value over time</h3><span className="small muted">Recorded at most every 15 minutes while you use the desk</span></div>
         <EquityChart hist={p.history} />
-        {p.history.length < 3 && <p className="small muted">The graph fills in as you use the desk: the value is recorded at most every 15 minutes.</p>}
+        {p.history.length < 3 && <p className="small muted">The graph fills in as you use the desk.</p>}
       </section>
 
       <div className="pf-grid">
