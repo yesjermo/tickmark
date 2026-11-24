@@ -27,6 +27,7 @@ import { AccountCard } from "./components/AccountCard";
 import { Mark } from "./components/Mark";
 import { TVChart, TVTape, openMyTradingView } from "./components/TradingView";
 import { Portfolio } from "./components/Portfolio";
+import { Splash, Welcome, welcomed } from "./components/Welcome";
 import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart, ExternalLink, LogIn, Ticket, Sparkles, NotebookPen } from "lucide-react";
 
 export type Level = "beginner" | "analyst";
@@ -42,6 +43,8 @@ export default function App() {
   const [auth, setAuth] = useState<{ portal: boolean; user: PortalUser | null; guest?: boolean; first_user?: boolean; open_signup?: boolean;
     admin_unclaimed?: boolean; github_login?: boolean; social?: string[] } | null>(null);
   const [authBox, setAuthBox] = useState<"in" | "up" | null>(null);
+  // First visit (or /?welcome): the front page introduces the desk before a guest lands in it.
+  const [intro, setIntro] = useState(() => new URLSearchParams(location.search).has("welcome") || !welcomed());
   // Like any website: visitors land on the desk as a guest (real prices, paper trades kept on this browser), and sign in when they want.
   const inflight = useRef<Promise<void> | null>(null);
   const wasUser = useRef(false);
@@ -64,15 +67,19 @@ export default function App() {
     window.addEventListener("swingdesk:signin", out);
     return () => { window.removeEventListener("swingdesk:signin", out); window.removeEventListener("swingdesk:signup", up); };
   }, []);
-  if (!auth) return <div className="pad muted">Loading…</div>;
+  if (!auth) return <Splash />;
+  const showIntro = intro && (auth.guest || new URLSearchParams(location.search).has("welcome"));
   if (auth.portal && !auth.user) return <Login firstUser={!!auth.first_user} openSignup={!!auth.open_signup} social={auth.social ?? []}
     onIn={(u) => setAuth({ ...auth, user: u, first_user: false })} />;
   return (
     <>
       <Desk adminUnclaimed={!!auth.admin_unclaimed} social={auth.social ?? []} user={auth.portal ? auth.user : null} key={`${auth.user?.id ?? "local"}:${auth.user?.role}`} guest={!!auth.guest} openAuth={setAuthBox} />
       <AnimatePresence>
+        {showIntro && <Welcome key="intro" guest={!!auth.guest} onEnter={() => setIntro(false)} onAuth={setAuthBox} />}
+      </AnimatePresence>
+      <AnimatePresence>
         {authBox && <Login key="auth" firstUser={false} openSignup={!!auth.open_signup} social={auth.social ?? []} start={authBox} guest={!!auth.guest}
-          onClose={() => setAuthBox(null)} onIn={() => { setAuthBox(null); load(); }} />}
+          onClose={() => setAuthBox(null)} onIn={() => { setAuthBox(null); setIntro(false); load(); }} />}
       </AnimatePresence>
     </>
   );

@@ -346,6 +346,7 @@ Keys are stored encrypted for your account only and never sent back to the brows
 
 ## Interface
 
+- **Front door:** a short splash (the mark on ink) while the session loads; a first-time guest then sees a front page that explains the desk, with Open the desk, Sign in and Create free account. It shows once per browser; `/?welcome` opens it again. The full-page sign-in has the same pitch beside the form.
 - **Command palette:** ⌘K / Ctrl K, via `cmdk`. Jump to any symbol, tab or action.
 - **Icons:** `lucide-react`.
 - **Toasts:** `sonner`. Errors stay up longer.

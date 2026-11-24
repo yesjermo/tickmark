@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { useDialog } from "./theme";
 const noop = () => {};
 import { motion } from "motion/react";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { api, ApiError } from "../api";
 
 export interface PortalUser { id: string; email: string; name: string | null; role: string; github?: boolean; google?: boolean }
@@ -32,7 +32,7 @@ export function Login({ firstUser, openSignup, social = [], onIn, start = "in", 
   const form = (
       <form className="card login" onSubmit={(e) => { e.preventDefault(); go(); }}>
         {onClose && <button type="button" className="iconbtn login-x" onClick={onClose} aria-label="Close"><X size={16} aria-hidden /></button>}
-        <h1><span className="logo"><Mark size={18} /></span> Tickmark</h1>
+        <h1><span className="login-brand"><span className="logo"><Mark size={18} /></span> Tickmark</span><span className="login-title">{firstUser ? "Set up this server" : mode === "in" ? "Sign in" : "Create account"}</span></h1>
         <p className="muted small">{firstUser ? "Create the administrator account for this Tickmark server." :
           mode === "in" ? "Sign in to your desk." : guest ? "Create a free account. Your guest paper trades, watchlist and journal come with you."
           : openSignup ? "Create your account." : "Create your account with the invite code you were sent."}</p>
@@ -58,7 +58,21 @@ export function Login({ firstUser, openSignup, social = [], onIn, start = "in", 
           {mode === "in" ? "New here? Create an account" : "Have an account? Sign in"}</button>}
       </form>
   );
-  if (!onClose) return <div className="login-wrap">{form}</div>;
+  if (!onClose) return (
+    <div className="login-wrap front-auth">
+      <aside className="fa-side" aria-label="About Tickmark">
+        <span className="wl-brand"><span className="wl-logo"><Mark size={15} /></span>Tickmark</span>
+        <h2>A trading desk that shows its reasons.</h2>
+        <ul>
+          <li><Check size={15} strokeWidth={2.2} aria-hidden /> Rules you can read, written from plain English</li>
+          <li><Check size={15} strokeWidth={2.2} aria-hidden /> The evidence behind every pass and fail</li>
+          <li><Check size={15} strokeWidth={2.2} aria-hidden /> Paper first; nothing trades until you click</li>
+        </ul>
+        <small>Decision-support software, not investment advice.</small>
+      </aside>
+      {form}
+    </div>
+  );
   return (
     <motion.div className="modal-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
