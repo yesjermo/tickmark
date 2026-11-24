@@ -1710,13 +1710,24 @@ DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if DIST.exists():
     app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
 
+    # index.html names the author's Render address in its link-preview tags (og:url, og:image, twitter:image);
+    # every other server swaps in its own public address so shared links preview and open there.
+    _BUILT_ORIGIN = "https://tickmark-yqj2.onrender.com"
+
+    def _index(request: Request) -> HTMLResponse:
+        html = (DIST / "index.html").read_text(encoding="utf-8")
+        base = _public_base(request)
+        if base != _BUILT_ORIGIN:
+            html = html.replace(_BUILT_ORIGIN, base)
+        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
     @app.get("/{path:path}")
-    def spa(path: str):
+    def spa(path: str, request: Request):
         if path.startswith("api/"):   # unknown API routes must 404, never return the web page
             raise HTTPException(404, f"No such endpoint: /{path}")
         # Root files from frontend/public (app manifest, service worker, icons); only names at the top level, no traversal.
-        if path and "/" not in path and not path.startswith(".") and (DIST / path).is_file():
+        if path and path != "index.html" and "/" not in path and not path.startswith(".") and (DIST / path).is_file():
             media = {"webmanifest": "application/manifest+json", "js": "text/javascript"}.get(path.rsplit(".", 1)[-1])
             no_cache = {"Cache-Control": "no-cache"} if path == "sw.js" else None
             return FileResponse(DIST / path, media_type=media, headers=no_cache)
-        return FileResponse(DIST / "index.html", headers={"Cache-Control": "no-cache"})
+        return _index(request)
