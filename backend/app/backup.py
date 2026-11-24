@@ -3,15 +3,17 @@
 When SWINGDESK_BACKUP_REPO (owner/name of a PRIVATE GitHub repo) and SWINGDESK_BACKUP_TOKEN (a fine-grained token with
 Contents read/write on that one repo) are set:
   * on startup, if the data folder is empty (fresh disk after a sleep or redeploy), the latest backup is restored;
-  * a background thread checks every 20 s and, when something changed, uploads a new snapshot (at most once a minute,
-    sooner after a sign-up); a final snapshot is taken on shutdown.
+  * a background thread checks every 20 s and, when the stored data really changed (not just a file's timestamp), uploads a
+    new snapshot at most every 5 minutes, right away after a sign-up; a final snapshot is taken on shutdown (sleep, redeploy).
 The snapshot is a tar.gz of every database (copied with SQLite's online backup, so it's consistent), settings and the
 per-user encrypted secret stores, then encrypted with the master key (Fernet). GitHub only ever stores ciphertext.
-Up to about a minute of changes can be lost if the instance is killed without a shutdown signal.
+Up to 5 minutes of changes can be lost if the instance is killed without a shutdown signal.
+Every upload is a commit in the backup repo, so unchanged data is never re-uploaded and routine changes are batched.
 """
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import logging
 import os
@@ -29,7 +31,7 @@ from . import db
 API = "https://api.github.com"
 PATH = "tickmark-data.bin"
 TRANSPORT = None              # tests inject a fake GitHub
-MIN_INTERVAL = 60
+MIN_INTERVAL = 300
 CHECK_EVERY = 20
 log = logging.getLogger("tickmark.backup")
 
@@ -68,6 +70,25 @@ def fingerprint() -> tuple:
                 ws = w.stat()
                 out.append((str(w.relative_to(db.DATA_DIR)), ws.st_size, ws.st_mtime_ns))
     return tuple(sorted(out))
+
+
+def content_digest() -> str:
+    """Hash of what is stored (rows and file bytes), ignoring timestamps and SQLite page layout."""
+    h = hashlib.sha256()
+    for p in sorted(_files()):
+        h.update(str(p.relative_to(db.DATA_DIR)).encode() + b"\0")
+        if p.suffix == ".db":
+            c = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+            try:
+                for line in c.iterdump():
+                    h.update(line.encode())
+            except sqlite3.Error:
+                h.update(p.read_bytes())
+            finally:
+                c.close()
+        else:
+            h.update(p.read_bytes())
+    return h.hexdigest()
 
 
 def snapshot() -> bytes:
@@ -156,6 +177,7 @@ class Backup:
         self.soon = threading.Event()
         self.thread: threading.Thread | None = None
         self.last_fp: tuple | None = None
+        self.last_digest: str | None = None
         self.last_push = 0.0
         self.state: dict = {"enabled": enabled()}
 
@@ -163,6 +185,10 @@ class Backup:
         if not enabled() or self.thread:
             return
         self.last_fp = fingerprint()
+        try:
+            self.last_digest = content_digest()      # just restored or already uploaded: no need to upload it again
+        except Exception:
+            self.last_digest = None
         self.thread = threading.Thread(target=self._run, name="tickmark-backup", daemon=True)
         self.thread.start()
 
@@ -178,8 +204,12 @@ class Backup:
         if fp == self.last_fp and not force:
             return
         try:
+            digest = content_digest()
+            if digest == self.last_digest and not force:     # files touched, nothing stored changed: no new commit
+                self.last_fp = fp
+                return
             out = push()
-            self.last_fp, self.last_push = fp, time.time()
+            self.last_fp, self.last_digest, self.last_push = fp, digest, time.time()
             self.state = {"enabled": True, "last_ok": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **out}
         except Exception as exc:
             self.state = {"enabled": True, "last_error": f"{type(exc).__name__}: {exc}"[:200]}

@@ -20,6 +20,10 @@ class FakeTicker:
         self.sym, self.world = sym, world
 
     def history(self, period, interval, auto_adjust):
+        if interval == "60m" and "hourly" in self.world:
+            rows = self.world["hourly"].get(self.sym, [])
+            idx = pd.DatetimeIndex([pd.Timestamp(t).tz_localize(ET) for t, *_ in rows])
+            return pd.DataFrame([r[1:] for r in rows], columns=["Open", "High", "Low", "Close", "Volume"], index=idx)
         if self.sym in self.world["fail"]:
             raise ConnectionError("rate limited")
         rows = [r for r in ROWS if r["symbol"] == self.sym and r["date"] <= self.world["today"]]
@@ -30,6 +34,9 @@ class FakeTicker:
                            "Close": [r["close"] for r in rows], "Volume": [r["volume"] for r in rows]}, index=idx)
         for d in self.world["nan_close"].get(self.sym, []):
             df.loc[pd.Timestamp(d).tz_localize(ET), "Close"] = float("nan")
+        for d in self.world.get("nan_row", {}).get(self.sym, []):
+            df.loc[pd.Timestamp(d).tz_localize(ET), ["Open", "High", "Low", "Close"]] = float("nan")
+            df.loc[pd.Timestamp(d).tz_localize(ET), "Volume"] = 0
         return df
 
     def get_earnings_dates(self, limit=12):
@@ -206,6 +213,27 @@ def test_forward_frozen_evidence_survives_rule_change(live):
     assert f["ruleset_version"] == 2 and f["stats"]["recorded"] == 0      # v2 stats start fresh
     old = [s for s in f["signals"] if s["ruleset_version"] == 1]
     assert old and old[0]["evidence"]["status"] == "QUALIFIES"
+
+
+def test_split_day_blank_rows_are_rebuilt_from_hourly_bars(world):
+    """SNDK's 8:1 split (2026-11-20): Yahoo's daily history had that day with no prices and the next with no close.
+    The split day is rebuilt from the hourly bars; the newest close comes from the quote (official), not the last hourly bar."""
+    go_to(world, "2026-11-23")
+    world["nan_row"] = {"SNDK": ["2026-11-20", "2026-11-23"]}
+    world["hourly"] = {"SNDK": [("2026-11-20 09:30", 89.91, 90.67, 85.0, 86.0, 4e7), ("2026-11-20 15:30", 80.5, 81.0, 78.25, 79.3, 3e7),
+                                ("2026-11-23 09:30", 98.56, 99.0, 90.0, 91.0, 5e7), ("2026-11-23 15:30", 88.0, 88.5, 86.96, 87.38, 2e7)]}
+    world["quote"] = {"SNDK": 87.71}
+    bars = {b["date"]: b for b in live_data.fetch_bars("SNDK")}
+    split_day, newest = bars["2026-11-20"], bars["2026-11-23"]
+    assert (split_day["open"], split_day["high"], split_day["low"], split_day["close"], split_day["volume"]) == (89.91, 90.67, 78.25, 79.3, 7e7)
+    assert "rebuilt from Yahoo hourly bars" in split_day["source"]
+    assert newest["close"] == 87.71 and "filled from the Yahoo quote" in newest["source"]
+    assert newest["open"] == 98.56 and newest["low"] == 86.96
+    assert "hourly" not in bars["2026-11-19"]["source"]              # complete rows are left as Yahoo sent them
+    world["hourly"] = {}
+    world["quote"] = {}
+    gap = {b["date"]: b for b in live_data.fetch_bars("SNDK")}["2026-11-20"]
+    assert gap["close"] is None                                       # nothing to rebuild from: stays missing, never zero
 
 
 def test_blank_newest_close_is_filled_from_the_quote(world):

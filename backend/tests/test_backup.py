@@ -121,3 +121,22 @@ def test_admin_can_see_backup_status_and_back_up_now(client, monkeypatch):
     assert puts and st.get("last_ok")
     monkeypatch.delenv("SWINGDESK_BACKUP_TOKEN")
     assert client.post("/api/admin/backup/now").status_code == 409
+
+
+def test_unchanged_data_is_not_uploaded_again(client, gh):
+    """Every upload is a commit: a file whose timestamp changed but whose rows didn't must not make a new one."""
+    import os
+    import time
+    b = backup.Backup()
+    b.maybe_push(force=True)
+    assert gh.puts == 1
+    for p in db.DATA_DIR.rglob("*.db"):                      # touched, same content
+        os.utime(p, (time.time() + 5, time.time() + 5))
+    b.maybe_push()
+    assert gh.puts == 1
+    c = db.connect()
+    with c:
+        db.kv_set(c, "watchlist", ["NVDA", "SNDK", "AMD"])     # a real change
+    c.close()
+    b.maybe_push()
+    assert gh.puts == 2

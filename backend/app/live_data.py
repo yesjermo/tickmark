@@ -69,21 +69,71 @@ def fetch_bars(symbol: str, now: datetime | None = None) -> list[dict]:
                     "close": clean[3], "volume": clean[4], "source": SOURCE})
     if not out:
         raise ValueError(f"no completed sessions for {symbol}")
-    last = out[-1]
     newer = any(ts.date().isoformat() > cutoff for ts in df.index)     # a new session started: the quote is today's, not that day's
-    if last["close"] is None and last["date"] == cutoff and not newer:
-        # Yahoo sometimes leaves the newest daily close blank (seen for SNDK on 2026-11-20) while its quote already has it.
-        # Once the session is complete, the regular-market price is that session's close; label where it came from.
-        try:
-            fi = yf().Ticker(symbol).fast_info
-            px = fi.get("lastPrice") if hasattr(fi, "get") else getattr(fi, "last_price", None)
-        except Exception:
-            px = None
-        lo, hi = last["low"], last["high"]
-        if px and px == px and px > 0 and (lo is None or hi is None or lo - 1e-6 <= px <= hi + 1e-6):
-            last["close"] = round(float(px), 4)
-            last["source"] = f"{SOURCE} (close filled from the Yahoo quote; history had none)"
+    _fill_blanks(symbol, out, cutoff, newer)
     return out
+
+
+FIELDS = ("open", "high", "low", "close")
+
+
+def _hourly_days(symbol: str) -> dict:
+    """Regular-hours daily bars rebuilt from Yahoo's hourly bars (same split adjustment as the daily history)."""
+    try:
+        h = yf().Ticker(symbol).history(period="1mo", interval="60m", auto_adjust=False)
+    except Exception:
+        return {}
+    if h is None or h.empty:
+        return {}
+    days: dict[str, dict] = {}
+    for ts, r in h.iterrows():
+        vals = [r.get("Open"), r.get("High"), r.get("Low"), r.get("Close"), r.get("Volume")]
+        if any(v is None or v != v for v in vals[:4]):
+            continue
+        d = (ts.tz_convert(ET) if ts.tzinfo else ts).date().isoformat()
+        o, hi, lo, c, v = (float(x) if x == x and x is not None else 0.0 for x in vals)
+        b = days.get(d)
+        if b is None:
+            days[d] = {"open": o, "high": hi, "low": lo, "close": c, "volume": v}
+        else:
+            b.update(high=max(b["high"], hi), low=min(b["low"], lo), close=c, volume=b["volume"] + v)
+    return days
+
+
+def _fill_blanks(symbol: str, out: list[dict], cutoff: str, newer: bool) -> None:
+    """Yahoo sometimes leaves recent daily rows blank: around SNDK's 8-for-1 split on 2026-11-20 both that day and the next
+    came back with no close (the split day with no prices at all). Rebuild them from Yahoo's hourly bars, and take the official
+    close of the latest session from the quote when it fits the day's range. Every filled row says where it came from."""
+    recent = out[-10:]
+    blank = [b for b in recent if any(b[f] is None for f in FIELDS)]
+    if not blank:
+        return
+    hourly = _hourly_days(symbol)
+    for b in blank:
+        h = hourly.get(b["date"])
+        if not h:
+            continue
+        empty = all(b[f] is None for f in FIELDS)
+        for f in FIELDS:
+            if b[f] is None:
+                b[f] = round(h[f], 4)
+        if empty or not b["volume"]:
+            b["volume"] = h["volume"] or b["volume"]
+        b["source"] = f"{SOURCE} (missing prices rebuilt from Yahoo hourly bars)"
+    # the official close of the latest completed session is the quote's last price (only once no newer session started).
+    # Yahoo's "previous close" is not used: around SNDK's split it said 80.82 while the tape (and the hourly bars) closed at 79.24.
+    last = out[-1]
+    if newer or last["date"] != cutoff or last not in blank:
+        return
+    try:
+        fi = yf().Ticker(symbol).fast_info
+        px = fi.get("lastPrice") if hasattr(fi, "get") else getattr(fi, "last_price", None)
+    except Exception:
+        return
+    lo, hi = last["low"], last["high"]
+    if px and px == px and px > 0 and (lo is None or hi is None or lo - 1e-6 <= px <= hi + 1e-6):
+        last["close"] = round(float(px), 4)
+        last["source"] = f"{SOURCE} (close filled from the Yahoo quote; history had none)"
 
 
 def fetch_earnings(symbol: str, today: date) -> dict:
