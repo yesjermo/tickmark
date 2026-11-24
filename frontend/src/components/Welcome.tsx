@@ -2,12 +2,12 @@ import { motion } from "motion/react";
 import { ArrowRight, Check, LogIn, X } from "lucide-react";
 import { Mark } from "./Mark";
 
-/** First paint while the session loads: the mark on ink, nothing else to read. */
+/** First paint while the session loads: the mark in its ink tile on the theme's canvas, nothing else to read. */
 export function Splash() {
   return (
     <div className="splash" role="status" aria-label="Loading Tickmark">
       <div className="splash-mark">
-        <svg width="44" height="44" viewBox="0 0 16 16" aria-hidden><path className="splash-tick" d="M15 1v14H1z" /></svg>
+        <span className="splash-tile"><svg width="28" height="28" viewBox="0 0 16 16" aria-hidden><path className="splash-tick" d="M15 1v14H1z" /></svg></span>
         <span>Tickmark</span>
       </div>
       <span className="splash-bar" aria-hidden><i /></span>

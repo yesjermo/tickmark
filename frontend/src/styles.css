@@ -1262,3 +1262,10 @@ button, a, select, label, [role=button] { touch-action: manipulation; -webkit-ta
 }
 .login h1 { display: flex; align-items: center; } .login-brand { display: inline-flex; align-items: center; gap: 8px; } .login-title { display: none; }
 @media (min-width: 880px) { .front-auth .login-brand { display: none; } .front-auth .login-title { display: inline; letter-spacing: -0.02em; } }
+/* splash follows the theme: stone in light, ink at night */
+.splash { background: var(--bg); color: var(--text); }
+.splash-tile { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; background: var(--feature); }
+.splash-bar { background: var(--line); }
+.splash-bar i { background: var(--text); }
+:root[data-theme="dark"] .splash-tile { background: var(--feature-2); }
+:root[data-theme="dark"] .splash-bar i { background: var(--signal); }
