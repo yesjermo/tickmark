@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tickmark — a trading desk that shows its reasons</title>
+<meta name="description" content="Tickmark is a self-hosted research and trading desk: rules you can read, evidence for every setup, paper testing before real money, and an AI copilot that drafts but never trades.">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="Tickmark">
+<meta property="og:description" content="Rules you can read, evidence for every setup, paper testing before real money, and an AI copilot that drafts but never trades.">
+<meta property="og:image" content="img/terminal-1440.webp">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M15 1v14H1z' fill='%235ea8e8'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v7.5L4.6 18.4A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.6L14 9.5V2M8.5 2h7M7 16h10"/></symbol>
+  <symbol id="i-tube" viewBox="0 0 24 24"><path d="M14.5 2v17.5a2.5 2.5 0 0 1-5 0V2M8.5 2h7M9.5 16h5"/></symbol>
+  <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+</svg>
+
+<header class="site-head">
+  <a class="brand" href="#top"><span class="logo" aria-hidden="true"></span>Tickmark</a>
+  <nav aria-label="Sections">
+    <a href="#workspaces">Workspaces</a>
+    <a href="#evidence">Evidence</a>
+    <a href="#copilot">Copilot</a>
+    <a href="#connect">Connections</a>
+    <a href="#safety">Safety</a>
+    <a class="nav-cta" href="https://tickmark-yqj2.onrender.com/">Open the app</a>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="hero-copy">
+      <h1>A trading desk that shows its reasons.</h1>
+      <p class="lede">Write your setup in plain English and Tickmark turns it into rules you can read. Every candidate comes with the
+        evidence behind it, every order passes risk checks first, and every trade lands in a journal that says what you
+        knew and what happened next.</p>
+      <p class="hero-cta"><a class="btn-cta" href="https://tickmark-yqj2.onrender.com/">Open Tickmark</a>
+        <span>Open to everyone: look around as a guest on real prices, paper-trade, and create an account when you want to connect a broker. The free server sleeps when idle, so the first visit can take about a minute.</span></p>
+      <p class="hero-meta">FastAPI and React · stocks, day trades and crypto · Claude, GPT and Gemini copilot · paper first, real money only per account</p>
+    </div>
+    <figure class="shot shot-hero">
+      <img src="img/terminal-1440.webp" srcset="img/terminal-1440.webp 1440w, img/terminal.webp 2880w" sizes="(min-width: 1200px) 1120px, 100vw"
+        width="1440" height="900" alt="The Tickmark terminal: watchlist on the left, an NVDA daily chart with its EMA and planned stop, the rule-by-rule evidence below, and the strategy library on the right." fetchpriority="high">
+    </figure>
+  </section>
+
+  <section id="workspaces" class="band">
+    <h2>Test the idea before it costs anything.</h2>
+    <p class="sub">Three workspaces, each with its own record. Switching never deletes the others.</p>
+    <ol class="ws-list">
+      <li class="ws ws-backtest">
+        <svg class="ic"><use href="#i-flask"/></svg>
+        <div><h3>Backtest</h3><p>Simulated sessions you step through one at a time, historical checks of each strategy, and replays of past trading days, bar by bar with no lookahead.</p></div>
+        <span class="money">No money</span>
+      </li>
+      <li class="ws ws-test">
+        <svg class="ic"><use href="#i-tube"/></svg>
+        <div><h3>Live test</h3><p>Real completed market bars and paper orders: a forward test of your rules, run on the local simulator or a broker's paper account.</p></div>
+        <span class="money">No money</span>
+      </li>
+      <li class="ws ws-trading">
+        <svg class="ic"><use href="#i-dot"/></svg>
+        <div><h3>Live trading</h3><p>Real orders, only on accounts you switched on one at a time, with the ticker typed to confirm every order.</p></div>
+        <span class="money real">Real money</span>
+      </li>
+    </ol>
+  </section>
+
+  <section id="evidence" class="split">
+    <div class="split-copy">
+      <h2>Why it qualified, in numbers you can check.</h2>
+      <p>Each rule shows its threshold, what was observed, and pass or fail, worded for beginners or analysts. Five swing strategies
+        (EMA pullback, breakout, mean reversion, trend following, post-earnings drift) and two intraday ones (VWAP reclaim,
+        opening-range breakout) share one engine, so a backtest, the live screen and the journal can't disagree.</p>
+      <p>Before an order goes out, the risk engine checks position count, portfolio heat, sector concentration, the daily loss limit, the
+        pattern-day-trader rule and a restricted list. Overrides need a written reason and are logged for good.</p>
+    </div>
+    <figure class="shot"><img src="img/risk-1440.webp" srcset="img/risk-1440.webp 1440w, img/risk.webp 2880w" sizes="(min-width: 1100px) 640px, 100vw"
+      width="1440" height="900" loading="lazy" alt="Rule evidence for NVDA with each rule passing, next to the pre-trade risk panel with versioned limits and the kill switch."></figure>
+  </section>
+
+  <section id="copilot" class="split split-rev">
+    <div class="split-copy">
+      <h2>A copilot that drafts. You decide.</h2>
+      <p>Ask in plain English: what qualifies today, whether a stop makes sense, how your crypto and stock positions add up. The copilot
+        answers from the same tools the app uses, so every number it quotes comes from your data.</p>
+      <ul class="ticks">
+        <li><svg class="ic sm"><use href="#i-check"/></svg>It can draft rule changes, risk limits, orders and exits; nothing happens until you click.</li>
+        <li><svg class="ic sm"><use href="#i-check"/></svg>It can't place, cancel or close an order, change keys, or touch the kill switch.</li>
+        <li><svg class="ic sm"><use href="#i-check"/></svg>Sign in and pick Claude, GPT or Gemini: like an IDE copilot's free tier, each signed-in user gets a monthly allowance, no API key needed.</li>
+        <li><svg class="ic sm"><use href="#i-check"/></svg>Want more? Add your own Claude, OpenAI or Gemini key for unlimited use, or use the free open models the server hosts, such as Google Gemma 4, Qwen 3.5 and a small OpenAI gpt-oss.</li>
+        <li><svg class="ic sm"><use href="#i-check"/></svg>Ask the AI to research a strategy for your watchlist: it explains its evidence and drafts rules you can read and apply.</li>
+        <li><svg class="ic sm"><use href="#i-check"/></svg>Install it as an app on your phone or computer: its own window and icon, and a bottom tab bar on phones.</li>
+        <li><svg class="ic sm"><use href="#i-check"/></svg>Focus mode for ADHD-friendly trading days: one next step at a time, bigger text, no extra motion, a 25-minute timer and optional calm background sound.</li>
+        <li><svg class="ic sm"><use href="#i-check"/></svg>Or use Tickmark inside Claude as an MCP connector, signed in with OAuth, on your own Claude plan.</li>
+      </ul>
+    </div>
+    <figure class="shot"><img src="img/palette-1440.webp" srcset="img/palette-1440.webp 680w, img/palette.webp 1360w" sizes="(min-width: 1100px) 640px, 100vw"
+      width="680" height="510" loading="lazy" alt="The command palette: symbols with their screen status, then places to jump to."></figure>
+  </section>
+
+  <section id="connect" class="band">
+    <h2>Your brokers and exchanges, with honest labels.</h2>
+    <p class="sub">Connecting only lets Tickmark read an account. Trading real money needs that account's own switch.</p>
+    <div class="venues">
+      <table>
+        <thead><tr><th scope="col">Venue</th><th scope="col">How it connects</th><th scope="col">What works</th></tr></thead>
+        <tbody>
+          <tr><td>Alpaca</td><td>API keys, or OAuth once the server registers an app</td><td><span class="tag t-trade">Paper and live trading</span></td></tr>
+          <tr><td>Interactive Brokers</td><td>Client Portal Gateway login</td><td><span class="tag t-trade">Paper and live trading</span></td></tr>
+          <tr><td>OKX, Coinbase, Kraken</td><td>Exchange API key</td><td><span class="tag t-trade">Spot crypto, per-account switch</span></td></tr>
+          <tr><td>Robinhood</td><td>Official crypto API</td><td><span class="tag t-trade">Crypto only</span></td></tr>
+          <tr><td>Binance.US, Bybit, moomoo / Futu</td><td>API key or OpenD gateway</td><td><span class="tag t-read">Read balances and positions</span></td></tr>
+          <tr><td>Phantom</td><td>Public address, watch-only</td><td><span class="tag t-read">Read-only, never a seed phrase</span></td></tr>
+          <tr><td>Schwab, Tradier, TradeStation</td><td>OAuth sign-in</td><td><span class="tag t-plan">Needs an app registration</span></td></tr>
+          <tr><td>Fidelity, Webull, Robinhood stocks</td><td>No usable public trading API</td><td><span class="tag t-none">Not possible directly</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figure class="shot shot-wide"><img src="img/connections-1440.webp" srcset="img/connections-1440.webp 1440w, img/connections.webp 2880w" sizes="(min-width: 1200px) 1120px, 100vw"
+      width="1440" height="900" loading="lazy" alt="The Connections page listing stock brokers with their sign-in methods and connection state."></figure>
+  </section>
+
+  <section id="safety" class="safety">
+    <h2>Built so a mistake stays small.</h2>
+    <div class="safety-grid">
+      <p><b>Paper first.</b> Every account starts on paper or read-only. Real money is switched on per account, by typing a confirmation.</p>
+      <p><b>A real kill switch.</b> One click stops all new orders, everywhere.</p>
+      <p><b>Stops at the broker.</b> Swing entries carry a stop leg, day trades go out as brackets, and anything still open is flattened at 15:55 ET.</p>
+      <p><b>Keys stay put.</b> Broker keys live in the system keychain, or encrypted per user in the multi-user portal, and are never sent to the browser.</p>
+      <p><b>A journal you can't rewrite.</b> The reasoning behind each entry is stored write-once; only the review note is editable.</p>
+      <p><b>Tested, and honest about the gaps.</b> 318 automated tests run against fake brokers, and the README lists what has been checked against real services and what hasn't.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <p><b>Tickmark</b> runs at <a href="https://tickmark-yqj2.onrender.com/">tickmark-yqj2.onrender.com</a>, open to everyone; the source is private.</p>
+  <p class="disclaimer">Tickmark is decision-support software, not investment advice. Trading involves risk of loss, including the money you put in. Paper and
+    backtest results don't predict live results.</p>
+</footer>
+</body>
+</html>

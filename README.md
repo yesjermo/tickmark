@@ -3,7 +3,7 @@
 A research and trading desk that shows its reasons. You describe a setup in plain English, Tickmark turns it into rules you can read, screens your watchlist on real prices, shows the evidence behind every pass and fail, runs pre-trade risk checks, and records every trade in a journal that can't be rewritten. An AI copilot can research strategies and draft orders, but nothing happens until you click.
 
 - **Live app:** https://tickmark-yqj2.onrender.com (open to everyone; visitors start as guests)
-- **Project page:** https://yesjermo.github.io/tickmark-site/
+- **Project page:** https://yesjermo.github.io/tickmark/ (source in `site/`, published by `.github/workflows/pages.yml`)
 - **Install it as an app:** Chrome/Edge install icon in the top bar; iPhone Share → Add to Home Screen; Safari on Mac File → Add to Dock. In the app, **Sign in** (guests) or **Account** sits in the bottom tab bar, and long-pressing the icon offers an Account shortcut.
 - **Other hosts:** one Docker image runs on Render, Zeabur, Koyeb, Northflank, Google Cloud Run or your own machine; see [docs/HOSTING.md](docs/HOSTING.md).
 

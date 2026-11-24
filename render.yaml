@@ -9,6 +9,10 @@ services:
     plan: free
     healthCheckPath: /healthz
     autoDeploy: true
+    buildFilter:                       # the project page (site/) and CI files don't redeploy the app
+      ignoredPaths:
+        - site/**
+        - .github/**
     envVars:
       - key: SWINGDESK_PORTAL          # multi-user sign-in, per-user data and encrypted keys
         value: "on"
