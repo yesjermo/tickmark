@@ -869,12 +869,12 @@ button, a, select, label, [role=button] { touch-action: manipulation; -webkit-ta
 .pf-graph .eq-chart { flex: 1; min-height: 140px; }
 .pf-graph p { margin: 6px 0 0; }
 @media (min-width: 1101px) and (min-height: 640px) {
-  .center-body:has(> .portfolio) { overflow: hidden; display: flex; flex-direction: column; padding-bottom: 14px; }
-  .portfolio { flex: 1; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; padding-top: 10px; gap: 12px; }
+  .center-body:has(> .portfolio) { overflow-y: auto; display: flex; flex-direction: column; padding-bottom: 14px; }
+  .portfolio { flex: 1 0 auto; min-height: 0; grid-template-rows: auto minmax(190px, 1fr) auto; padding-top: 10px; gap: 12px; }
   .portfolio > .small.muted { display: none; }
-  .pf-grid { max-height: 34vh; min-height: 0; }
+  .pf-grid { max-height: 28vh; min-height: 0; }
   .pf-grid > .pf-block { overflow-y: auto; overscroll-behavior: contain; }
-  .pf-hero { padding: 16px 20px; }
+  .pf-hero { padding: 14px 20px; gap: 12px 28px; }
 }
 .chart-card > .chart-bar { flex: none; }
 .chart-card > .chart-body { flex: 1 1 auto; }
@@ -1027,3 +1027,80 @@ button, a, select, label, [role=button] { touch-action: manipulation; -webkit-ta
 .google-btn { justify-content: center; text-decoration: none; background: #ffffff; border: 1px solid #dadce0; color: #1f1f1f; font-weight: 500; }
 .google-btn:hover:not(:disabled) { background: #f8f9fa; border-color: #c6c9cc; }
 :root[data-theme="dark"] .google-btn { background: #131314; border-color: #8e918f; color: #e3e3e3; }
+
+/* ================= Signal layer (reference: Framer "Clario" finance dashboard) =================
+   One lime signal for "you are here / do this": the active rail item, focus, quick-action chips, progress.
+   It never marks price direction: up stays sage, down stays burnt orange. IDE palettes map it to their own accent. */
+:root {
+  --signal: #b6e85a; --on-signal: #101417; --signal-soft: #b6e85a33;
+  --primary: var(--accent); --on-primary: var(--on-accent);
+  --card-r: 16px; --tile-r: 14px;
+  --lift: 0 1px 2px #1014170d, 0 10px 28px -14px #10141733;
+}
+:root[data-theme="dark"] {
+  --signal: #b9ec5f; --signal-soft: #b9ec5f26;
+  --primary: var(--signal); --on-primary: var(--on-signal);
+  --feature: #060708; --feature-2: #131617;
+  --lift: 0 1px 2px #0000004d, 0 12px 30px -14px #000000b3;
+}
+:root[data-palette]:not([data-palette="stone"]) { --signal: var(--accent); --on-signal: var(--on-accent); --signal-soft: var(--accent-soft);
+  --primary: var(--accent); --on-primary: var(--on-accent); }
+
+/* rail: the current page is a lime pill */
+.rail-mark { background: transparent; }
+.rail-mark .mark { color: var(--signal); }
+.rail-btn { border-radius: 999px; }
+.rail-btn.on { background: var(--signal); color: var(--on-signal); box-shadow: 0 6px 18px -6px var(--signal-soft); }
+.rail-btn.on:hover { background: var(--signal); color: var(--on-signal); }
+.rail-btn:focus-visible { outline-color: var(--signal); }
+:focus-visible { outline-color: var(--focus); }
+
+/* round icon buttons in the top bar */
+.iconbtn { width: 38px; height: 38px; border-radius: 999px; background: var(--panel); border-color: transparent; box-shadow: var(--lift); }
+.iconbtn:hover { border-color: transparent; background: var(--panel-2); }
+
+/* primary action: ink pill on stone, lime pill at night */
+.btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 88%, var(--text)); border-color: transparent; }
+
+/* softer, rounder blocks; one elevation each (no border under a shadow) */
+.chart-card, .center-body, .left .card, .right .card, .center-body .card { border-radius: var(--card-r); }
+.pf-block { border-radius: var(--card-r); background: var(--panel-2); }
+
+/* portfolio: black balance card + quick-action tiles */
+.pf-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); gap: 14px; align-items: stretch; }
+.pf-top.solo { grid-template-columns: minmax(0, 1fr); }
+.pf-hero { border-radius: var(--card-r); background: var(--feature); box-shadow: var(--lift); }
+.pf-v { font-weight: 600; letter-spacing: -0.03em; }
+.pf-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; border-radius: var(--card-r); background: var(--panel-2); }
+.pf-action { display: grid; justify-items: start; align-content: space-between; gap: 10px; min-height: 92px; padding: 12px; text-align: left;
+  border: 0; border-radius: var(--tile-r); background: var(--panel); color: var(--text); cursor: pointer;
+  transition: transform .14s var(--ease), box-shadow .18s var(--ease), background-color .16s var(--ease); }
+.pf-action:hover { box-shadow: var(--lift); transform: translateY(-1px); }
+.pf-action:active { transform: scale(.98); }
+.pf-action:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pf-action-ic { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: var(--signal); color: var(--on-signal); }
+.pf-action-t { font-weight: 600; font-size: 13.5px; line-height: 1.2; }
+.pf-action-h { font-size: 11.5px; color: var(--muted); line-height: 1.3; margin-top: -8px; }
+
+/* allocation: lime fill in an ink track, like a limit meter */
+.alloc-track { height: 12px; border-radius: 999px; background: var(--feature); padding: 2px; }
+.alloc-bar { border-radius: 999px; background: var(--signal); }
+
+/* narrow column: the tiles become one compact row so the value chart keeps its room */
+@container (max-width: 760px) {
+  .pf-top { grid-template-columns: 1fr; }
+  .pf-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px; gap: 6px; }
+  .pf-action { min-height: 0; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 7px 8px; }
+  .pf-action-ic { width: 28px; height: 28px; } .pf-action-ic svg { width: 15px; height: 15px; }
+  .pf-action-t { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pf-action-h { display: none; }
+}
+@container (max-width: 460px) { .pf-actions { grid-template-columns: 1fr 1fr; } }
+.pf-graph { overflow: hidden; }
+:root[data-motion="off"] .pf-action:hover { transform: none; }
+/* phone bottom bar: icon + label tabs, so the lime "here" mark is a rounded tab, not a circle */
+@media (max-width: 760px) {
+  .rail-btn { border-radius: 12px; }
+  .rail-btn.on { box-shadow: none; }
+}

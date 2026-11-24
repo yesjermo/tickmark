@@ -27,7 +27,7 @@ import { AccountCard } from "./components/AccountCard";
 import { Mark } from "./components/Mark";
 import { TVChart, TVTape, openMyTradingView } from "./components/TradingView";
 import { Portfolio } from "./components/Portfolio";
-import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart, ExternalLink, LogIn } from "lucide-react";
+import { BarChart3, BookOpen, Bot, Briefcase, CandlestickChart, ClipboardList, FileText, Gauge, Bitcoin, ListChecks, Plug, ShieldCheck, Target, Timer, UserRound, Sun, Moon, PieChart, ExternalLink, LogIn, Ticket, Sparkles, NotebookPen } from "lucide-react";
 
 export type Level = "beginner" | "analyst";
 type CenterTab = "portfolio" | "evidence" | "journal" | "forward" | "documents" | "day" | "crypto" | "connections";
@@ -290,7 +290,12 @@ function Desk({ user, guest = false, openAuth, adminUnclaimed = false, social = 
           <AnimatePresence mode="wait" initial={false}>
             <motion.section key={center} ref={centerScroll} className="center-body" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}>
-              {center === "portfolio" && <Portfolio tick={tick} notify={setToast} />}
+              {center === "portfolio" && <Portfolio tick={tick} notify={setToast} actions={[
+                { label: "Order ticket", hint: "Draft a paper order", icon: Ticket, run: () => setSide("order") },
+                { label: "Research", hint: "Ask the copilot", icon: Sparkles, run: () => setSide("copilot") },
+                { label: "Journal", hint: "Review your trades", icon: NotebookPen, run: () => setCenter("journal") },
+                { label: "Connect", hint: "Broker, exchange or AI", icon: Plug, run: () => setCenter("connections") },
+              ]} />}
               {center === "evidence" && ev && <Evidence ev={ev} level={level} ruleset={screen!.ruleset} tick={tick} />}
               {center === "journal" && <Journal entries={journal} level={level} onChanged={refresh} tick={tick} />}
               {center === "forward" && <Forward tick={tick} level={level} live={live} />}

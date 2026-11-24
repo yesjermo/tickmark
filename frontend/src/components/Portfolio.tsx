@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
+import type { LucideIcon } from "lucide-react";
 import { api, ApiError } from "../api";
 
 interface Hist { ts: string; equity: number; cash: number; invested: number; linked_usd: number }
@@ -39,8 +40,9 @@ function EquityChart({ hist }: { hist: Hist[] }) {
     const pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
     const x = (t: number) => L + (t1 === t0 ? (w - L - R) / 2 : ((t - t0) / (t1 - t0)) * (w - L - R));
     const y = (v: number) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
-    const step = (hi - lo) / 3;
-    const ticks = [0, 1, 2, 3].map((i) => lo + step * i);
+    const n = H < 200 ? 2 : 3;                       // fewer value labels when the graph is short, so they never collide
+    const step = (hi - lo) / n;
+    const ticks = Array.from({ length: n + 1 }, (_, i) => lo + step * i);
     const path = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
     const area = pts.length > 1 ? `${path}L${x(pts[pts.length - 1].t).toFixed(1)},${H - B}L${x(pts[0].t).toFixed(1)},${H - B}Z` : "";
     return { x, y, ticks, path, area };
@@ -83,7 +85,9 @@ function EquityChart({ hist }: { hist: Hist[] }) {
   );
 }
 
-export function Portfolio({ tick, notify }: { tick: number; notify: (s: string) => void }) {
+export interface QuickAction { label: string; hint: string; icon: LucideIcon; run: () => void }
+
+export function Portfolio({ tick, notify, actions = [] }: { tick: number; notify: (s: string) => void; actions?: QuickAction[] }) {
   const [p, setP] = useState<P | null>(null);
   useEffect(() => { api.get<P>("/api/portfolio").then(setP).catch((e) => notify((e as ApiError).message)); }, [tick, notify]);
   if (!p) return <div className="pad muted">Loading the portfolio…</div>;
@@ -91,6 +95,7 @@ export function Portfolio({ tick, notify }: { tick: number; notify: (s: string) 
   const unreal = p.positions.reduce((s, x) => s + (x.unrealized ?? 0), 0);
   return (
     <div className="portfolio">
+      <div className={`pf-top ${actions.length ? "" : "solo"}`}>
       <section className="pf-hero">
         <div>
           <span className="pf-k">Total balance · {WS[p.workspace] ?? "Account"}{p.linked_usd ? " + linked accounts" : ""}</span>
@@ -107,6 +112,18 @@ export function Portfolio({ tick, notify }: { tick: number; notify: (s: string) 
           <div><dt>Closed trades</dt><dd className="num">{p.realized?.closed ?? 0}</dd></div>
         </dl>
       </section>
+      {actions.length > 0 && (
+        <nav className="pf-actions" aria-label="Quick actions">
+          {actions.map(({ label, hint, icon: Icon, run }) => (
+            <button key={label} type="button" className="pf-action" onClick={run}>
+              <span className="pf-action-ic"><Icon size={18} strokeWidth={1.8} aria-hidden /></span>
+              <span className="pf-action-t">{label}</span>
+              <span className="pf-action-h">{hint}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+      </div>
 
       <section className="pf-block pf-graph">
         <h3>Total value over time</h3>
