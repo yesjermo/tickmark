@@ -138,6 +138,14 @@ function DataBackup({ notify }: { notify: (s: string) => void }) {
       )}
       {!st.has_master_key && <p className="small loss">SWINGDESK_MASTER_KEY isn't set, so backups can't be read back. Set it once and never change it.</p>}
       {st.enabled && <div className="row"><button className="btn small" disabled={busy} onClick={now}>{busy ? "Backing up…" : "Back up now"}</button></div>}
+      <h4>Dataset</h4>
+      <p className="small muted">One SQL file with every account and what people entered: watchlists, rules, orders, fills, journal, copilot
+        chats, alerts, risk settings, TradingView signals and value history. Never passwords, sessions, tokens or keys.</p>
+      <div className="row">
+        <a className="btn small primary" href="/api/admin/dataset?format=sqlite" download>Download SQL dataset (.sqlite)</a>
+        <a className="btn small" href="/api/admin/dataset?format=csv" download>CSV files (.zip)</a>
+      </div>
+      <p className="small muted">Open the .sqlite file with DB Browser for SQLite, TablePlus or <code>sqlite3</code>; the zip opens in any spreadsheet.</p>
     </section>
   );
 }

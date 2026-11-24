@@ -383,6 +383,23 @@ async def admin_backup_now(request: Request):
     return _backup_state()
 
 
+@app.get("/api/admin/dataset")
+async def admin_dataset(request: Request, format: str = "sqlite", guests: int = 1):
+    """Admin: one SQL dataset of every account and what people entered (no passwords, sessions, tokens or keys)."""
+    _admin(request)
+    from datetime import datetime, timezone
+    from fastapi.responses import Response
+    from . import dataset
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
+    if format == "csv":
+        data, _ = await run_in_threadpool(dataset.csv_zip_bytes, bool(guests))
+        name, media = f"tickmark-dataset-{stamp}.zip", "application/zip"
+    else:
+        data, _ = await run_in_threadpool(dataset.sqlite_bytes, bool(guests))
+        name, media = f"tickmark-dataset-{stamp}.sqlite", "application/vnd.sqlite3"
+    return Response(data, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
+
+
 @app.get("/api/admin/ai")
 def admin_ai(request: Request):
     _admin(request)

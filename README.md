@@ -446,6 +446,8 @@ The repo includes a `Dockerfile` (it builds the web app, then serves the app and
 2. Create a fine-grained personal access token with **Contents: read and write** on that one repo only.
 3. In Render → tickmark → **Environment**, set `SWINGDESK_BACKUP_REPO` (`owner/tickmark-data`) and `SWINGDESK_BACKUP_TOKEN`.
 
+**SQL dataset:** Account → Data backup → **Download SQL dataset** (administrator) gives one SQLite file with every account (email, name, role, sign-in links, created and last seen) and what each person entered: watchlists, rule sets, previews, orders, fills, journal, copilot chats and drafts, alerts, risk limits and overrides, TradingView signals, value history, day-trading rules, crypto orders and desk settings, each row tagged with `user_id` and desk (`live`, `backtest`, `real_money`). **CSV files (.zip)** has the same tables for spreadsheets. Never included: password hashes, sessions, invite codes, tokens and keys (and any field whose name looks like a secret); market price data is left out. Example: `sqlite3 tickmark-dataset.sqlite "SELECT email, role, created_at FROM accounts"`.
+
 Then check **Account → Data backup** (administrator): it shows whether backup is on, when it last saved, how many accounts there are, and has **Back up now**.
 
 Checked 2026-11-24 against the real GitHub API: an encrypted snapshot (an account row and a desk file) was pushed to the private repo, restored into an empty folder byte-for-byte, then deleted.
